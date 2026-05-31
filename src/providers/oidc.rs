@@ -30,13 +30,26 @@ impl OidcProvider {
         client_secret: String,
         redirect_url: String,
     ) -> Result<Self, ConnectError> {
+        let client: Arc<dyn HttpClient> = Arc::new(ReqwestClient::new());
+        Self::discover_with_client(issuer_url, client_id, client_secret, redirect_url, client)
+            .await
+    }
+
+    /// Internal method that performs OIDC discovery using a provided HTTP client.
+    /// This exists to enable injecting mock clients in tests.
+    pub(crate) async fn discover_with_client(
+        issuer_url: &str,
+        client_id: String,
+        client_secret: String,
+        redirect_url: String,
+        client: Arc<dyn HttpClient>,
+    ) -> Result<Self, ConnectError> {
         let well_known_url = if issuer_url.ends_with('/') {
             format!("{}.well-known/openid-configuration", issuer_url)
         } else {
             format!("{}/.well-known/openid-configuration", issuer_url)
         };
 
-        let client: Arc<dyn HttpClient> = Arc::new(ReqwestClient::new());
         let res = client
             .get(&well_known_url)
             .send()
@@ -309,15 +322,15 @@ mod tests {
         });
 
         // Test with trailing slash
-        let _provider = OidcProvider::discover(
+        let _provider = OidcProvider::discover_with_client(
             "https://issuer.com/",
             "client_id".to_string(),
             "client_secret".to_string(),
             "https://redirect.url".to_string(),
+            mock_client.clone(),
         )
         .await
-        .unwrap()
-        .with_http_client(mock_client.clone());
+        .unwrap();
 
         let urls = mock_client.captured_urls.lock().unwrap();
         assert_eq!(
@@ -344,15 +357,15 @@ mod tests {
         });
 
         // Test without trailing slash
-        let _provider = OidcProvider::discover(
+        let _provider = OidcProvider::discover_with_client(
             "https://issuer.com",
             "client_id".to_string(),
             "client_secret".to_string(),
             "https://redirect.url".to_string(),
+            mock_client.clone(),
         )
         .await
-        .unwrap()
-        .with_http_client(mock_client.clone());
+        .unwrap();
 
         let urls = mock_client.captured_urls.lock().unwrap();
         assert_eq!(
@@ -377,11 +390,12 @@ mod tests {
             captured_urls: Mutex::new(vec![]),
         });
 
-        let res = OidcProvider::discover(
+        let res = OidcProvider::discover_with_client(
             "https://issuer.com",
             "client_id".to_string(),
             "client_secret".to_string(),
             "https://redirect.url".to_string(),
+            mock_client.clone(),
         )
         .await;
 
