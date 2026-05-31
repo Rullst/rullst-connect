@@ -67,7 +67,7 @@ impl Provider for GitlabProvider {
 
         Ok(ConnectUser {
             id: user_res["id"].as_i64().unwrap_or(0).to_string(),
-            name: user_res["name"].as_str().unwrap_or("").to_string(),
+            name: user_res["name"].as_str().map(String::from).unwrap_or_default(),
             email: user_res["email"].as_str().map(|s: &str| s.to_string()),
             avatar_url: user_res["avatar_url"].as_str().map(|s: &str| s.to_string()),
             email_verified: None,

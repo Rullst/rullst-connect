@@ -47,11 +47,11 @@ impl Provider for NotionProvider {
 
         let owner = &token_res["owner"]["user"];
 
-        let access_token = token_res["access_token"].as_str().unwrap_or("").to_string();
+        let access_token = token_res["access_token"].as_str().map(String::from).unwrap_or_default();
 
         Ok(ConnectUser {
-            id: owner["id"].as_str().unwrap_or("").to_string(),
-            name: owner["name"].as_str().unwrap_or("").to_string(),
+            id: owner["id"].as_str().map(String::from).unwrap_or_default(),
+            name: owner["name"].as_str().map(String::from).unwrap_or_default(),
             email: owner["person"]["email"]
                 .as_str()
                 .map(|s: &str| s.to_string()),
@@ -86,8 +86,8 @@ impl Provider for NotionProvider {
         };
 
         Ok(ConnectUser {
-            id: user["id"].as_str().unwrap_or("").to_string(),
-            name: user["name"].as_str().unwrap_or("").to_string(),
+            id: user["id"].as_str().map(String::from).unwrap_or_default(),
+            name: user["name"].as_str().map(String::from).unwrap_or_default(),
             email: user["person"]["email"]
                 .as_str()
                 .map(|s: &str| s.to_string()),

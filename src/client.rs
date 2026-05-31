@@ -102,6 +102,7 @@ impl<'a> RequestBuilder<'a> {
     }
 }
 
+#[derive(Debug)]
 pub struct ResponseWrapper {
     res: HttpResponse,
 }
@@ -290,5 +291,149 @@ impl HttpClient for ReqwestClient {
         let body = serde_json::from_str(&text).unwrap_or(Value::String(text));
 
         Ok(HttpResponse { status, body })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    use std::sync::{Arc, Mutex};
+
+    struct TestClient {
+        captured_req: Arc<Mutex<Option<HttpRequest>>>,
+    }
+
+    #[async_trait]
+    impl HttpClient for TestClient {
+        async fn execute(&self, req: HttpRequest) -> Result<HttpResponse, crate::error::ConnectError> {
+            *self.captured_req.lock().unwrap() = Some(req);
+            Ok(HttpResponse {
+                status: 200,
+                body: json!({"status": "ok"}),
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn test_request_builder_methods() {
+        let captured = Arc::new(Mutex::new(None));
+        let client = TestClient {
+            captured_req: captured.clone(),
+        };
+
+        let builder = RequestBuilder::new(&client, "POST".to_string(), "https://example.com/api".to_string())
+            .header("X-Test", "Value")
+            .bearer_auth("my_token")
+            .basic_auth("username", Some("password"))
+            .json(&json!({"hello": "world"}))
+            .form(&[("param1", "val1"), ("param2", "val2")]);
+
+        let wrapper = builder.send().await.unwrap();
+        let res_json: serde_json::Value = wrapper.json().await.unwrap();
+        assert_eq!(res_json["status"], "ok");
+
+        let req = captured.lock().unwrap().take().unwrap();
+        assert_eq!(req.method, "POST");
+        assert_eq!(req.url, "https://example.com/api");
+        assert_eq!(req.headers, vec![("X-Test".to_string(), "Value".to_string())]);
+        assert_eq!(req.bearer_auth, Some("my_token".to_string()));
+        assert_eq!(req.basic_auth, Some(("username".to_string(), Some("password".to_string()))));
+        assert_eq!(req.json, Some(json!({"hello": "world"})));
+        assert_eq!(
+            req.form,
+            vec![
+                ("param1".to_string(), "val1".to_string()),
+                ("param2".to_string(), "val2".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_response_wrapper_error_for_status() {
+        // Test case 1: success (status < 400)
+        let success_wrapper = ResponseWrapper {
+            res: HttpResponse {
+                status: 200,
+                body: json!({"data": "success"}),
+            },
+        };
+        let success_res = success_wrapper.error_for_status();
+        assert!(success_res.is_ok());
+
+        // Test case 2: >= 400 with standard Oauth error/error_description
+        let oauth_error_wrapper = ResponseWrapper {
+            res: HttpResponse {
+                status: 400,
+                body: json!({
+                    "error": "invalid_request",
+                    "error_description": "The request is missing a required parameter"
+                }),
+            },
+        };
+        let oauth_error_res = oauth_error_wrapper.error_for_status();
+        assert!(oauth_error_res.is_err());
+        match oauth_error_res.unwrap_err() {
+            crate::error::ConnectError::ProviderApiError { code, message } => {
+                assert_eq!(code, "invalid_request");
+                assert_eq!(message, "The request is missing a required parameter");
+            }
+            _ => panic!("Expected ProviderApiError"),
+        }
+
+        // Test case 3: >= 400 with "message" field
+        let msg_error_wrapper = ResponseWrapper {
+            res: HttpResponse {
+                status: 401,
+                body: json!({
+                    "message": "Unauthorized access to resource"
+                }),
+            },
+        };
+        let msg_error_res = msg_error_wrapper.error_for_status();
+        assert!(msg_error_res.is_err());
+        match msg_error_res.unwrap_err() {
+            crate::error::ConnectError::ProviderApiError { code, message } => {
+                assert_eq!(code, "HTTP_401");
+                assert_eq!(message, "Unauthorized access to resource");
+            }
+            _ => panic!("Expected ProviderApiError"),
+        }
+
+        // Test case 4: >= 400 with unknown JSON structure
+        let unknown_json_wrapper = ResponseWrapper {
+            res: HttpResponse {
+                status: 500,
+                body: json!({
+                    "internal_code": 999
+                }),
+            },
+        };
+        let unknown_json_res = unknown_json_wrapper.error_for_status();
+        assert!(unknown_json_res.is_err());
+        match unknown_json_res.unwrap_err() {
+            crate::error::ConnectError::ProviderApiError { code, message } => {
+                assert_eq!(code, "HTTP_500");
+                assert_eq!(message, r#"{"internal_code":999}"#);
+            }
+            _ => panic!("Expected ProviderApiError"),
+        }
+
+        // Test case 5: >= 400 with raw plain text body
+        let raw_text_wrapper = ResponseWrapper {
+            res: HttpResponse {
+                status: 403,
+                body: json!("Forbidden plain text explanation"),
+            },
+        };
+        let raw_text_res = raw_text_wrapper.error_for_status();
+        assert!(raw_text_res.is_err());
+        match raw_text_res.unwrap_err() {
+            crate::error::ConnectError::ProviderApiError { code, message } => {
+                assert_eq!(code, "HTTP_403");
+                assert_eq!(message, "Forbidden plain text explanation");
+            }
+            _ => panic!("Expected ProviderApiError"),
+        }
     }
 }

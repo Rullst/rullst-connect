@@ -67,8 +67,8 @@ impl Provider for PinterestProvider {
             .await?;
 
         Ok(ConnectUser {
-            id: user_res["username"].as_str().unwrap_or("").to_string(),
-            name: user_res["username"].as_str().unwrap_or("").to_string(), // Pinterest relies on username
+            id: user_res["username"].as_str().map(String::from).unwrap_or_default(),
+            name: user_res["username"].as_str().map(String::from).unwrap_or_default(), // Pinterest relies on username
             email: None,
             avatar_url: user_res["profile_image"]
                 .as_str()

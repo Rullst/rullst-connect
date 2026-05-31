@@ -77,8 +77,8 @@ impl Provider for XProvider {
         let data = &user_res["data"];
 
         Ok(ConnectUser {
-            id: data["id"].as_str().unwrap_or("").to_string(),
-            name: data["name"].as_str().unwrap_or("").to_string(),
+            id: data["id"].as_str().map(String::from).unwrap_or_default(),
+            name: data["name"].as_str().map(String::from).unwrap_or_default(),
             email: None, // X v2 does not return email via this endpoint by default
             avatar_url: data["profile_image_url"]
                 .as_str()

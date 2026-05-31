@@ -69,8 +69,8 @@ impl Provider for LinearProvider {
         let viewer = &user_res["data"]["viewer"];
 
         Ok(ConnectUser {
-            id: viewer["id"].as_str().unwrap_or("").to_string(),
-            name: viewer["name"].as_str().unwrap_or("").to_string(),
+            id: viewer["id"].as_str().map(String::from).unwrap_or_default(),
+            name: viewer["name"].as_str().map(String::from).unwrap_or_default(),
             email: viewer["email"].as_str().map(|s: &str| s.to_string()),
             avatar_url: viewer["avatarUrl"].as_str().map(|s: &str| s.to_string()),
             email_verified: None,

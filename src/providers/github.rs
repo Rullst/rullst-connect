@@ -161,9 +161,9 @@ impl Provider for GithubProvider {
             .await?;
 
         Ok(crate::user::DeviceAuthorizationResponse {
-            device_code: res["device_code"].as_str().unwrap_or("").to_string(),
-            user_code: res["user_code"].as_str().unwrap_or("").to_string(),
-            verification_uri: res["verification_uri"].as_str().unwrap_or("").to_string(),
+            device_code: res["device_code"].as_str().map(String::from).unwrap_or_default(),
+            user_code: res["user_code"].as_str().map(String::from).unwrap_or_default(),
+            verification_uri: res["verification_uri"].as_str().map(String::from).unwrap_or_default(),
             verification_uri_complete: res["verification_uri_complete"]
                 .as_str()
                 .map(|s| s.to_string()),

@@ -69,8 +69,8 @@ impl Provider for AsanaProvider {
         let data = &user_res["data"];
 
         Ok(ConnectUser {
-            id: data["gid"].as_str().unwrap_or("").to_string(),
-            name: data["name"].as_str().unwrap_or("").to_string(),
+            id: data["gid"].as_str().map(String::from).unwrap_or_default(),
+            name: data["name"].as_str().map(String::from).unwrap_or_default(),
             email: data["email"].as_str().map(|s: &str| s.to_string()),
             avatar_url: data["photo"]["image_128x128"]
                 .as_str()

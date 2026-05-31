@@ -72,8 +72,8 @@ impl Provider for RedditProvider {
             .await?;
 
         Ok(ConnectUser {
-            id: user_res["id"].as_str().unwrap_or("").to_string(),
-            name: user_res["name"].as_str().unwrap_or("").to_string(),
+            id: user_res["id"].as_str().map(String::from).unwrap_or_default(),
+            name: user_res["name"].as_str().map(String::from).unwrap_or_default(),
             email: None, // Reddit identity scope does not provide email by default
             avatar_url: user_res["icon_img"].as_str().map(|s: &str| s.to_string()),
             email_verified: None,

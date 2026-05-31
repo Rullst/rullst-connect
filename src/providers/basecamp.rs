@@ -74,7 +74,7 @@ impl Provider for BasecampProvider {
             id: identity["id"]
                 .as_i64()
                 .map(|i| i.to_string())
-                .unwrap_or_else(|| "".to_string()),
+                .unwrap_or_default(),
             name,
             email: identity["email_address"]
                 .as_str()

@@ -66,8 +66,8 @@ impl Provider for PatreonProvider {
         let attributes = &user_data["attributes"];
 
         Ok(ConnectUser {
-            id: user_data["id"].as_str().unwrap_or("").to_string(),
-            name: attributes["full_name"].as_str().unwrap_or("").to_string(),
+            id: user_data["id"].as_str().map(String::from).unwrap_or_default(),
+            name: attributes["full_name"].as_str().map(String::from).unwrap_or_default(),
             email: attributes["email"].as_str().map(|s: &str| s.to_string()),
             avatar_url: attributes["image_url"]
                 .as_str()

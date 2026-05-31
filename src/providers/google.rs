@@ -54,8 +54,8 @@ impl Provider for GoogleProvider {
                 {
                     if let Ok(payload) = serde_json::from_slice::<Value>(&payload_bytes) {
                         ConnectUser {
-                            id: payload["sub"].as_str().unwrap_or("").to_string(),
-                            name: payload["name"].as_str().unwrap_or("").to_string(),
+                            id: payload["sub"].as_str().map(String::from).unwrap_or_default(),
+                            name: payload["name"].as_str().map(String::from).unwrap_or_default(),
                             email: payload["email"].as_str().map(|s: &str| s.to_string()),
                             avatar_url: payload["picture"]
                                 .as_str()
@@ -104,8 +104,8 @@ impl Provider for GoogleProvider {
             .await?;
 
         Ok(ConnectUser {
-            id: user_res["sub"].as_str().unwrap_or("").to_string(),
-            name: user_res["name"].as_str().unwrap_or("").to_string(),
+            id: user_res["sub"].as_str().map(String::from).unwrap_or_default(),
+            name: user_res["name"].as_str().map(String::from).unwrap_or_default(),
             email: user_res["email"].as_str().map(|s: &str| s.to_string()),
             avatar_url: user_res["picture"]
                 .as_str()

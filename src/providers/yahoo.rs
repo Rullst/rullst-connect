@@ -70,8 +70,8 @@ impl Provider for YahooProvider {
             .await?;
 
         Ok(ConnectUser {
-            id: user_res["sub"].as_str().unwrap_or("").to_string(),
-            name: user_res["name"].as_str().unwrap_or("").to_string(),
+            id: user_res["sub"].as_str().map(String::from).unwrap_or_default(),
+            name: user_res["name"].as_str().map(String::from).unwrap_or_default(),
             email: user_res["email"].as_str().map(|s: &str| s.to_string()),
             avatar_url: user_res["picture"].as_str().map(|s: &str| s.to_string()),
             email_verified: None,

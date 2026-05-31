@@ -13,7 +13,11 @@ pub fn build_oauth_params<'a>(
     params.append_pair("client_id", client_id);
     params.append_pair("redirect_uri", redirect_uri);
     if !scopes.is_empty() {
-        params.append_pair("scope", &scopes.join(" "));
+        if scopes.len() == 1 {
+            params.append_pair("scope", &scopes[0]);
+        } else {
+            params.append_pair("scope", &scopes.join(" "));
+        }
     }
     if let Some(s) = state {
         params.append_pair("state", s);

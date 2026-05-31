@@ -69,8 +69,8 @@ impl Provider for InstagramProvider {
             .await?;
 
         Ok(ConnectUser {
-            id: user_res["id"].as_str().unwrap_or("").to_string(),
-            name: user_res["username"].as_str().unwrap_or("").to_string(),
+            id: user_res["id"].as_str().map(String::from).unwrap_or_default(),
+            name: user_res["username"].as_str().map(String::from).unwrap_or_default(),
             email: None,
             avatar_url: None, // Instagram Basic Display does not provide profile picture
             email_verified: None,

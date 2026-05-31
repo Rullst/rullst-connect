@@ -84,7 +84,7 @@ impl Provider for VkProvider {
             id: user_data["id"]
                 .as_i64()
                 .map(|i| i.to_string())
-                .unwrap_or_else(|| "".to_string()),
+                .unwrap_or_default(),
             name,
             email: None, // Email is generally not available in users.get unless specified and granted
             avatar_url: user_data["photo_200"].as_str().map(|s: &str| s.to_string()),

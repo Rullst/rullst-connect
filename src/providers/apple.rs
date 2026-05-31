@@ -1,15 +1,16 @@
+use crate::client::{HttpClient, HttpClientExt};
 use crate::provider::Provider;
 use crate::user::ConnectUser;
 use async_trait::async_trait;
 use base64::Engine;
 use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
-use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::sync::OnceLock;
+use tokio::sync::OnceCell;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-static CLIENT: OnceLock<Client> = OnceLock::new();
+static DEFAULT_CLIENT: ::std::sync::LazyLock<::std::sync::Arc<dyn crate::client::HttpClient>> =
+    ::std::sync::LazyLock::new(|| ::std::sync::Arc::new(crate::client::ReqwestClient::new()));
 
 pub struct AppleProvider {
     client_id: String,
@@ -17,19 +18,20 @@ pub struct AppleProvider {
     key_id: String,
     private_key_pem: String,
     redirect_url: String,
-    http_client: Client,
+    http_client: ::std::sync::Arc<dyn crate::client::HttpClient>,
     scopes: Vec<String>,
     state: Option<String>,
     pkce_challenge: Option<String>,
+    jwks: OnceCell<jsonwebtoken::jwk::JwkSet>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-struct AppleClaims {
-    iss: String,
+struct AppleClaims<'a> {
+    iss: &'a str,
     iat: u64,
     exp: u64,
-    aud: String,
-    sub: String,
+    aud: &'a str,
+    sub: &'a str,
 }
 
 impl AppleProvider {
@@ -48,10 +50,11 @@ impl AppleProvider {
             key_id,
             private_key_pem,
             redirect_url,
-            http_client: CLIENT.get_or_init(Client::new).clone(),
+            http_client: DEFAULT_CLIENT.clone(),
             scopes: vec!["name".to_string(), "email".to_string()],
             state: None,
             pkce_challenge: None,
+            jwks: OnceCell::new(),
         }
     }
 
@@ -70,14 +73,19 @@ impl AppleProvider {
         self
     }
 
+    pub fn with_http_client(mut self, client: ::std::sync::Arc<dyn crate::client::HttpClient>) -> Self {
+        self.http_client = client;
+        self
+    }
+
     fn generate_client_secret(&self) -> Result<String, crate::error::ConnectError> {
         let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
         let claims = AppleClaims {
-            iss: self.team_id.clone(),
+            iss: &self.team_id,
             iat: now,
             exp: now + 86400 * 30, // 30 days expiration
-            aud: "https://appleid.apple.com".to_string(),
-            sub: self.client_id.clone(),
+            aud: "https://appleid.apple.com",
+            sub: &self.client_id,
         };
 
         let mut header = Header::new(Algorithm::ES256);
@@ -87,6 +95,20 @@ impl AppleProvider {
         let token = encode(&header, &claims, &encoding_key)?;
 
         Ok(token)
+    }
+
+    async fn get_jwks(&self) -> Result<&jsonwebtoken::jwk::JwkSet, crate::error::ConnectError> {
+        self.jwks.get_or_try_init(|| async {
+            let res = self
+                .http_client
+                .get("https://appleid.apple.com/auth/keys")
+                .send()
+                .await?
+                .error_for_status()?
+                .json::<jsonwebtoken::jwk::JwkSet>()
+                .await?;
+            Ok(res)
+        }).await
     }
 }
 
@@ -131,7 +153,7 @@ impl Provider for AppleProvider {
         let id_token_str = token_res["id_token"].as_str().ok_or_else(|| {
             crate::error::ConnectError::Token("Failed to get id_token from Apple".to_string())
         })?;
-        let access_token = token_res["access_token"].as_str().unwrap_or("").to_string();
+        let access_token = token_res["access_token"].as_str().map(String::from).unwrap_or_default();
 
         let mut user = self.get_user_from_token(id_token_str).await?;
         user.access_token = access_token;
@@ -149,18 +171,39 @@ impl Provider for AppleProvider {
         &self,
         id_token_str: &str,
     ) -> Result<ConnectUser, crate::error::ConnectError> {
-        let parts: Vec<&str> = id_token_str.split('.').collect();
-        if parts.len() != 3 {
-            return Err(crate::error::ConnectError::Provider(
-                "Invalid id_token format".to_string(),
-            ));
+        let mut payload: Option<Value> = None;
+
+        if let Ok(header) = jsonwebtoken::decode_header(id_token_str) {
+            let kid = header.kid.unwrap_or_default();
+            if let Some(jwks) = self.get_jwks().await.ok() {
+                if let Some(jwk) = jwks.find(&kid) {
+                    if let Ok(decoding_key) = jsonwebtoken::DecodingKey::from_jwk(jwk) {
+                        let mut validation = jsonwebtoken::Validation::new(header.alg);
+                        validation.set_audience(&[&self.client_id]);
+                        validation.set_issuer(&["https://appleid.apple.com"]);
+                        validation.validate_exp = true;
+
+                        if let Ok(token_data) =
+                            jsonwebtoken::decode::<Value>(id_token_str, &decoding_key, &validation)
+                        {
+                            payload = Some(token_data.claims);
+                        }
+                    }
+                }
+            }
         }
 
-        let payload_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(parts[1])?;
-        let payload: Value = serde_json::from_slice(&payload_bytes)?;
+        let payload = match payload {
+            Some(p) => p,
+            None => {
+                return Err(crate::error::ConnectError::Provider(
+                    "Failed to verify Apple id_token signature or claims".to_string(),
+                ));
+            }
+        };
 
         Ok(ConnectUser {
-            id: payload["sub"].as_str().unwrap_or("").to_string(),
+            id: payload["sub"].as_str().map(String::from).unwrap_or_default(),
             name: String::with_capacity(256), // Developer needs to extract this from the form_post on first login
             email: payload["email"].as_str().map(|s: &str| s.to_string()),
             avatar_url: None, // Apple does not provide avatars
@@ -198,7 +241,7 @@ impl Provider for AppleProvider {
             .await?;
 
         if let Some(err) = token_res["error"].as_str() {
-            let err_desc = token_res["error_description"].as_str().unwrap_or("");
+            let err_desc = token_res["error_description"].as_str().unwrap_or_default();
             return Err(crate::error::ConnectError::Token(format!(
                 "Provider returned error: {} - {}",
                 err, err_desc
@@ -217,5 +260,47 @@ impl Provider for AppleProvider {
             .as_u64()
             .or_else(|| token_res["expires_in"].as_i64().map(|v| v as u64));
         Ok(user)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_apple_redirect_url() {
+        let provider = AppleProvider::new(
+            "client_id".to_string(),
+            "team_id".to_string(),
+            "key_id".to_string(),
+            "private_key".to_string(),
+            "https://redirect.url".to_string(),
+        );
+
+        let url = provider.redirect_url();
+        assert!(url.starts_with("https://appleid.apple.com/auth/authorize?"));
+        assert!(url.contains("client_id=client_id"));
+        assert!(url.contains("redirect_uri=https%3A%2F%2Fredirect.url"));
+        assert!(url.contains("response_mode=form_post"));
+    }
+
+    #[tokio::test]
+    async fn test_apple_get_user_from_token_invalid() {
+        let provider = AppleProvider::new(
+            "client_id".to_string(),
+            "team_id".to_string(),
+            "key_id".to_string(),
+            "private_key".to_string(),
+            "https://redirect.url".to_string(),
+        );
+
+        let res = provider.get_user_from_token("invalid.token.format").await;
+        assert!(res.is_err());
+        match res.unwrap_err() {
+            crate::error::ConnectError::Provider(msg) => {
+                assert!(msg.contains("Failed to verify Apple id_token"));
+            }
+            _ => panic!("Expected Provider error"),
+        }
     }
 }
