@@ -47,7 +47,10 @@ impl Provider for NotionProvider {
 
         let owner = &token_res["owner"]["user"];
 
-        let access_token = token_res["access_token"].as_str().map(String::from).unwrap_or_default();
+        let access_token = token_res["access_token"]
+            .as_str()
+            .map(String::from)
+            .unwrap_or_default();
 
         Ok(ConnectUser {
             id: owner["id"].as_str().map(String::from).unwrap_or_default(),

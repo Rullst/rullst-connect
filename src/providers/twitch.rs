@@ -79,8 +79,14 @@ impl Provider for TwitchProvider {
         let user_data = &user_data_array[0];
 
         Ok(ConnectUser {
-            id: user_data["id"].as_str().map(String::from).unwrap_or_default(),
-            name: user_data["display_name"].as_str().map(String::from).unwrap_or_default(),
+            id: user_data["id"]
+                .as_str()
+                .map(String::from)
+                .unwrap_or_default(),
+            name: user_data["display_name"]
+                .as_str()
+                .map(String::from)
+                .unwrap_or_default(),
             email: user_data["email"].as_str().map(|s: &str| s.to_string()),
             avatar_url: user_data["profile_image_url"]
                 .as_str()

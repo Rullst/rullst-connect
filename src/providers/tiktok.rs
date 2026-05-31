@@ -64,8 +64,14 @@ impl Provider for TiktokProvider {
         let data = &user_res["data"];
 
         Ok(ConnectUser {
-            id: data["open_id"].as_str().map(String::from).unwrap_or_default(),
-            name: data["display_name"].as_str().map(String::from).unwrap_or_default(),
+            id: data["open_id"]
+                .as_str()
+                .map(String::from)
+                .unwrap_or_default(),
+            name: data["display_name"]
+                .as_str()
+                .map(String::from)
+                .unwrap_or_default(),
             email: None, // TikTok API v2 does not expose email publicly
             avatar_url: data["avatar_url"].as_str().map(|s: &str| s.to_string()),
             email_verified: None,

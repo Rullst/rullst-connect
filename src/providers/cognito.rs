@@ -115,7 +115,10 @@ impl Provider for CognitoProvider {
             .await?;
 
         Ok(ConnectUser {
-            id: user_res["sub"].as_str().map(String::from).unwrap_or_default(),
+            id: user_res["sub"]
+                .as_str()
+                .map(String::from)
+                .unwrap_or_default(),
             name: user_res["name"]
                 .as_str()
                 .or_else(|| user_res["username"].as_str())

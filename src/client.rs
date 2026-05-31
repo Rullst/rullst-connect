@@ -306,7 +306,10 @@ mod tests {
 
     #[async_trait]
     impl HttpClient for TestClient {
-        async fn execute(&self, req: HttpRequest) -> Result<HttpResponse, crate::error::ConnectError> {
+        async fn execute(
+            &self,
+            req: HttpRequest,
+        ) -> Result<HttpResponse, crate::error::ConnectError> {
             *self.captured_req.lock().unwrap() = Some(req);
             Ok(HttpResponse {
                 status: 200,
@@ -322,12 +325,16 @@ mod tests {
             captured_req: captured.clone(),
         };
 
-        let builder = RequestBuilder::new(&client, "POST".to_string(), "https://example.com/api".to_string())
-            .header("X-Test", "Value")
-            .bearer_auth("my_token")
-            .basic_auth("username", Some("password"))
-            .json(&json!({"hello": "world"}))
-            .form(&[("param1", "val1"), ("param2", "val2")]);
+        let builder = RequestBuilder::new(
+            &client,
+            "POST".to_string(),
+            "https://example.com/api".to_string(),
+        )
+        .header("X-Test", "Value")
+        .bearer_auth("my_token")
+        .basic_auth("username", Some("password"))
+        .json(&json!({"hello": "world"}))
+        .form(&[("param1", "val1"), ("param2", "val2")]);
 
         let wrapper = builder.send().await.unwrap();
         let res_json: serde_json::Value = wrapper.json().await.unwrap();
@@ -336,9 +343,15 @@ mod tests {
         let req = captured.lock().unwrap().take().unwrap();
         assert_eq!(req.method, "POST");
         assert_eq!(req.url, "https://example.com/api");
-        assert_eq!(req.headers, vec![("X-Test".to_string(), "Value".to_string())]);
+        assert_eq!(
+            req.headers,
+            vec![("X-Test".to_string(), "Value".to_string())]
+        );
         assert_eq!(req.bearer_auth, Some("my_token".to_string()));
-        assert_eq!(req.basic_auth, Some(("username".to_string(), Some("password".to_string()))));
+        assert_eq!(
+            req.basic_auth,
+            Some(("username".to_string(), Some("password".to_string())))
+        );
         assert_eq!(req.json, Some(json!({"hello": "world"})));
         assert_eq!(
             req.form,

@@ -70,8 +70,14 @@ impl Provider for SlackProvider {
         let user_data = &user_res["user"];
 
         Ok(ConnectUser {
-            id: user_data["id"].as_str().map(String::from).unwrap_or_default(),
-            name: user_data["name"].as_str().map(String::from).unwrap_or_default(),
+            id: user_data["id"]
+                .as_str()
+                .map(String::from)
+                .unwrap_or_default(),
+            name: user_data["name"]
+                .as_str()
+                .map(String::from)
+                .unwrap_or_default(),
             email: user_data["email"].as_str().map(|s: &str| s.to_string()),
             avatar_url: user_data["image_512"].as_str().map(|s: &str| s.to_string()),
             email_verified: None,

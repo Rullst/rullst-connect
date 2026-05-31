@@ -88,8 +88,14 @@ impl Provider for BitbucketProvider {
             .map(|s: &str| s.to_string());
 
         Ok(ConnectUser {
-            id: user_res["account_id"].as_str().map(String::from).unwrap_or_default(),
-            name: user_res["display_name"].as_str().map(String::from).unwrap_or_default(),
+            id: user_res["account_id"]
+                .as_str()
+                .map(String::from)
+                .unwrap_or_default(),
+            name: user_res["display_name"]
+                .as_str()
+                .map(String::from)
+                .unwrap_or_default(),
             email,
             avatar_url: user_res["links"]["avatar"]["href"]
                 .as_str()

@@ -1,13 +1,12 @@
-use crate::client::{HttpClient, HttpClientExt};
+use crate::client::HttpClientExt;
 use crate::provider::Provider;
 use crate::user::ConnectUser;
 use async_trait::async_trait;
-use base64::Engine;
 use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tokio::sync::OnceCell;
 use std::time::{SystemTime, UNIX_EPOCH};
+use tokio::sync::OnceCell;
 
 static DEFAULT_CLIENT: ::std::sync::LazyLock<::std::sync::Arc<dyn crate::client::HttpClient>> =
     ::std::sync::LazyLock::new(|| ::std::sync::Arc::new(crate::client::ReqwestClient::new()));
@@ -73,7 +72,10 @@ impl AppleProvider {
         self
     }
 
-    pub fn with_http_client(mut self, client: ::std::sync::Arc<dyn crate::client::HttpClient>) -> Self {
+    pub fn with_http_client(
+        mut self,
+        client: ::std::sync::Arc<dyn crate::client::HttpClient>,
+    ) -> Self {
         self.http_client = client;
         self
     }
@@ -98,17 +100,19 @@ impl AppleProvider {
     }
 
     async fn get_jwks(&self) -> Result<&jsonwebtoken::jwk::JwkSet, crate::error::ConnectError> {
-        self.jwks.get_or_try_init(|| async {
-            let res = self
-                .http_client
-                .get("https://appleid.apple.com/auth/keys")
-                .send()
-                .await?
-                .error_for_status()?
-                .json::<jsonwebtoken::jwk::JwkSet>()
-                .await?;
-            Ok(res)
-        }).await
+        self.jwks
+            .get_or_try_init(|| async {
+                let res = self
+                    .http_client
+                    .get("https://appleid.apple.com/auth/keys")
+                    .send()
+                    .await?
+                    .error_for_status()?
+                    .json::<jsonwebtoken::jwk::JwkSet>()
+                    .await?;
+                Ok(res)
+            })
+            .await
     }
 }
 
@@ -153,7 +157,10 @@ impl Provider for AppleProvider {
         let id_token_str = token_res["id_token"].as_str().ok_or_else(|| {
             crate::error::ConnectError::Token("Failed to get id_token from Apple".to_string())
         })?;
-        let access_token = token_res["access_token"].as_str().map(String::from).unwrap_or_default();
+        let access_token = token_res["access_token"]
+            .as_str()
+            .map(String::from)
+            .unwrap_or_default();
 
         let mut user = self.get_user_from_token(id_token_str).await?;
         user.access_token = access_token;
@@ -175,20 +182,19 @@ impl Provider for AppleProvider {
 
         if let Ok(header) = jsonwebtoken::decode_header(id_token_str) {
             let kid = header.kid.unwrap_or_default();
-            if let Some(jwks) = self.get_jwks().await.ok() {
-                if let Some(jwk) = jwks.find(&kid) {
-                    if let Ok(decoding_key) = jsonwebtoken::DecodingKey::from_jwk(jwk) {
-                        let mut validation = jsonwebtoken::Validation::new(header.alg);
-                        validation.set_audience(&[&self.client_id]);
-                        validation.set_issuer(&["https://appleid.apple.com"]);
-                        validation.validate_exp = true;
+            if let Ok(jwks) = self.get_jwks().await
+                && let Some(jwk) = jwks.find(&kid)
+                && let Ok(decoding_key) = jsonwebtoken::DecodingKey::from_jwk(jwk)
+            {
+                let mut validation = jsonwebtoken::Validation::new(header.alg);
+                validation.set_audience(&[&self.client_id]);
+                validation.set_issuer(&["https://appleid.apple.com"]);
+                validation.validate_exp = true;
 
-                        if let Ok(token_data) =
-                            jsonwebtoken::decode::<Value>(id_token_str, &decoding_key, &validation)
-                        {
-                            payload = Some(token_data.claims);
-                        }
-                    }
+                if let Ok(token_data) =
+                    jsonwebtoken::decode::<Value>(id_token_str, &decoding_key, &validation)
+                {
+                    payload = Some(token_data.claims);
                 }
             }
         }
@@ -203,7 +209,10 @@ impl Provider for AppleProvider {
         };
 
         Ok(ConnectUser {
-            id: payload["sub"].as_str().map(String::from).unwrap_or_default(),
+            id: payload["sub"]
+                .as_str()
+                .map(String::from)
+                .unwrap_or_default(),
             name: String::with_capacity(256), // Developer needs to extract this from the form_post on first login
             email: payload["email"].as_str().map(|s: &str| s.to_string()),
             avatar_url: None, // Apple does not provide avatars

@@ -75,8 +75,14 @@ impl Provider for SpotifyProvider {
             .map(|s: &str| s.to_string());
 
         Ok(ConnectUser {
-            id: user_res["id"].as_str().map(String::from).unwrap_or_default(),
-            name: user_res["display_name"].as_str().map(String::from).unwrap_or_default(),
+            id: user_res["id"]
+                .as_str()
+                .map(String::from)
+                .unwrap_or_default(),
+            name: user_res["display_name"]
+                .as_str()
+                .map(String::from)
+                .unwrap_or_default(),
             email: user_res["email"].as_str().map(|s: &str| s.to_string()),
             avatar_url,
             email_verified: None,

@@ -67,7 +67,10 @@ impl Provider for DropboxProvider {
             .await?;
 
         Ok(ConnectUser {
-            id: user_res["account_id"].as_str().map(String::from).unwrap_or_default(),
+            id: user_res["account_id"]
+                .as_str()
+                .map(String::from)
+                .unwrap_or_default(),
             name: user_res["name"]["display_name"]
                 .as_str()
                 .unwrap_or("")

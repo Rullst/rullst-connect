@@ -69,8 +69,14 @@ impl Provider for MicrosoftProvider {
             .await?;
 
         Ok(ConnectUser {
-            id: user_res["id"].as_str().map(String::from).unwrap_or_default(),
-            name: user_res["displayName"].as_str().map(String::from).unwrap_or_default(),
+            id: user_res["id"]
+                .as_str()
+                .map(String::from)
+                .unwrap_or_default(),
+            name: user_res["displayName"]
+                .as_str()
+                .map(String::from)
+                .unwrap_or_default(),
             email: user_res["mail"]
                 .as_str()
                 .or_else(|| user_res["userPrincipalName"].as_str())

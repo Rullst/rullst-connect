@@ -79,7 +79,10 @@ impl Provider for StripeProvider {
             .unwrap_or("");
 
         Ok(ConnectUser {
-            id: user_res["id"].as_str().map(String::from).unwrap_or_default(),
+            id: user_res["id"]
+                .as_str()
+                .map(String::from)
+                .unwrap_or_default(),
             name: name.to_string(),
             email: user_res["email"].as_str().map(|s: &str| s.to_string()),
             avatar_url: None, // Stripe does not expose an avatar URL via this endpoint

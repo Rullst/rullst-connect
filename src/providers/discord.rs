@@ -68,7 +68,10 @@ impl Provider for DiscordProvider {
             .json::<Value>()
             .await?;
 
-        let id = user_res["id"].as_str().map(String::from).unwrap_or_default();
+        let id = user_res["id"]
+            .as_str()
+            .map(String::from)
+            .unwrap_or_default();
         let avatar_hash = user_res["avatar"].as_str();
         let avatar_url = avatar_hash.map(|hash| {
             format!(
@@ -79,7 +82,10 @@ impl Provider for DiscordProvider {
 
         Ok(ConnectUser {
             id,
-            name: user_res["username"].as_str().map(String::from).unwrap_or_default(),
+            name: user_res["username"]
+                .as_str()
+                .map(String::from)
+                .unwrap_or_default(),
             email: user_res["email"].as_str().map(|s: &str| s.to_string()),
             avatar_url,
             email_verified: user_res["verified"].as_bool(),

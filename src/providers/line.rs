@@ -67,8 +67,14 @@ impl Provider for LineProvider {
             .await?;
 
         Ok(ConnectUser {
-            id: user_res["userId"].as_str().map(String::from).unwrap_or_default(),
-            name: user_res["displayName"].as_str().map(String::from).unwrap_or_default(),
+            id: user_res["userId"]
+                .as_str()
+                .map(String::from)
+                .unwrap_or_default(),
+            name: user_res["displayName"]
+                .as_str()
+                .map(String::from)
+                .unwrap_or_default(),
             email: None, // Line email requires parsing the 'id_token' JWT payload. We omit it here for simplicity.
             avatar_url: user_res["pictureUrl"].as_str().map(|s: &str| s.to_string()),
             email_verified: None,

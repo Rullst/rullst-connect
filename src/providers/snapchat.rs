@@ -71,8 +71,14 @@ impl Provider for SnapchatProvider {
         let me = &user_res["data"]["me"];
 
         Ok(ConnectUser {
-            id: me["externalId"].as_str().map(String::from).unwrap_or_default(),
-            name: me["displayName"].as_str().map(String::from).unwrap_or_default(),
+            id: me["externalId"]
+                .as_str()
+                .map(String::from)
+                .unwrap_or_default(),
+            name: me["displayName"]
+                .as_str()
+                .map(String::from)
+                .unwrap_or_default(),
             email: None,
             avatar_url: me["bitmoji"]["avatar"]
                 .as_str()
