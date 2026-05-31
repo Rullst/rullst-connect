@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [6.1.3] - 2026-05-31
+
+### Changed
+- **Dependency Updates**: Updated all direct dependencies to use flexible versioning for automatic patch/minor updates:
+  - `async-trait` `0.1.89` → `0.1`
+  - `base64` `0.22.1` → `0.22`
+  - `jsonwebtoken` `10.4.0` → `10`
+  - `rand` `0.10.1` → `0.10`
+  - `reqwest` `0.13.4` → `0.13` (maintained for compatibility with reqwest-middleware)
+  - `serde` `1.0.228` → `1`
+  - `serde_json` `1.0.150` → `1`
+  - `sha2` `0.11.0` → `0.11`
+  - `thiserror` `2.0.18` → `2`
+  - `tokio` `1.52.3` → `1`
+  - `url` `2.5.8` → `2.5`
+  - `axum` `0.8.9` → `0.8`
+  - `actix-web` `4.13.0` → `4`
+  - `leptos_router` `0.6` → `0.7`
+  - `serde_urlencoded` `0.7.1` → `0.7`
+  - `reqwest-middleware` `0.5.2` → `0.5`
+  - `reqwest-retry` `0.9.1` → `0.9`
+  - `tower-sessions` `0.15.0` → `0.15`
+  - `wiremock` `0.6.5` → `0.6` (dev)
+
 ## [6.1.2] - 2026-05-31
 
 ### Changed
