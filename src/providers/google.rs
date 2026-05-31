@@ -1,4 +1,4 @@
-use crate::client::{HttpClient, HttpClientExt};
+use crate::client::HttpClientExt;
 use crate::provider::Provider;
 use crate::user::ConnectUser;
 use async_trait::async_trait;
@@ -121,9 +121,9 @@ impl Provider for GoogleProvider {
             let mut payload: Option<Value> = None;
             if let Ok(header) = jsonwebtoken::decode_header(id_token) {
                 let kid = header.kid.unwrap_or_default();
-                if let Some(jwks) = self.get_jwks().await.ok() {
-                    if let Some(jwk) = jwks.find(&kid) {
-                        if let Ok(decoding_key) = jsonwebtoken::DecodingKey::from_jwk(jwk) {
+                if let Ok(jwks) = self.get_jwks().await
+                    && let Some(jwk) = jwks.find(&kid)
+                        && let Ok(decoding_key) = jsonwebtoken::DecodingKey::from_jwk(jwk) {
                             let mut validation = jsonwebtoken::Validation::new(header.alg);
                             validation.set_audience(&[&self.client_id]);
                             validation.set_issuer(&["https://accounts.google.com", "accounts.google.com"]);
@@ -135,8 +135,6 @@ impl Provider for GoogleProvider {
                                 payload = Some(token_data.claims);
                             }
                         }
-                    }
-                }
             }
 
             if let Some(p) = payload {

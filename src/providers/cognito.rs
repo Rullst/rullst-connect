@@ -1,4 +1,4 @@
-use crate::client::{HttpClient, HttpClientExt};
+use crate::client::HttpClientExt;
 use crate::error::ConnectError;
 use crate::provider::Provider;
 use crate::user::ConnectUser;
