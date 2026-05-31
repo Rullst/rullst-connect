@@ -7,7 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [6.1.6] - 2026-05-31
+## [6.2.0] - 2026-05-31
+
+### Security
+- **Cryptographic JWT Validation — Apple Provider**: `AppleProvider` now lazily fetches Apple's public JWKS from `https://appleid.apple.com/auth/keys` (cached via `tokio::sync::OnceCell`) and cryptographically verifies the `id_token` signature and claims on every login. Removes the previous unverified base64-decode approach.
+- **Cryptographic JWT Validation — Google Provider**: `GoogleProvider` now lazily fetches Google's JWKS from `https://www.googleapis.com/oauth2/v3/certs` and validates the `id_token` signature. If validation fails (e.g. network error, unknown key), it falls back gracefully to the secure `/userinfo` API endpoint.
+
+### Performance
+- **Zero-Allocation Option Mapping**: Replaced `.as_str().unwrap_or("").to_string()` with `.as_str().map(String::from).unwrap_or_default()` across all 34 providers. This eliminates unnecessary heap allocations when a field is absent.
+- **Smart Scope Serialization**: Optimized `build_oauth_params` in `src/provider.rs` to skip the `join(" ")` heap allocation entirely when only one scope is requested.
+- **No-Clone Secret Generation**: Refactored `AppleClaims` to use lifetime references `AppleClaims<'a>` instead of owned `String`s, removing unnecessary clones during Apple client secret generation.
+
+### Added
+- **Mockable `CognitoProvider`**: Refactored to use `Arc<dyn HttpClient>` and exposed `with_http_client` builder method, enabling custom/mock HTTP clients for testing without a real Cognito server.
+- **Mockable `OktaProvider`**: Same refactoring as above. Now fully testable offline with any custom client.
+- **Mockable `AppleProvider`**: Refactored from `reqwest::Client` to `Arc<dyn HttpClient>` and exposed `with_http_client`, enabling mock-based unit testing.
+- **Unit Tests — `RequestBuilder` & `ResponseWrapper`**: Comprehensive tests added to `src/client.rs` covering all builder methods and validating `error_for_status` behavior for standard OAuth error payloads, `message` fields, unknown JSON shapes, and plain-text bodies.
+- **Unit Tests — `CognitoProvider` & `OktaProvider`**: Redirect URL unit tests added, verifying correct domain and parameter construction.
+- **Unit Tests — `AppleProvider`**: Redirect URL and invalid token handling unit tests added.
+- **Unit Tests — `GoogleProvider`**: Redirect URL unit test added.
+- **Unit Tests — `OidcProvider::discover` edge cases**: Verifies correct `.well-known` URL construction with and without trailing slashes, and validates descriptive errors on missing OIDC configuration fields.
+
+### Changed
+- `ResponseWrapper` now derives `Debug` to support standard Rust test assertion patterns.
+- `GoogleProvider` is now defined explicitly instead of via the `define_provider!` macro to support the additional `jwks` `OnceCell` field.
+
+
 
 ### Changed
 - **Dependency Updates**: 
