@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [6.1.4] - 2026-05-31
+
+### Changed
+- **Dependency Updates**: 
+  - `leptos_router` `0.7` → `0.8`
+
+--- 
+
 ## [6.1.3] - 2026-05-31
 
 ### Changed
