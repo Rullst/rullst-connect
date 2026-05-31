@@ -5,8 +5,7 @@ import sys
 def bump_version(new_version):
     files_to_update = [
         ("Cargo.toml", r'^version = ".*?"', f'version = "{new_version}"'),
-        ("README.md", r'Supported Providers \(v.*?\)', f'Supported Providers (v{new_version})'),
-   ]
+]
 
     for filename, pattern, replacement in files_to_update:
         if not os.path.exists(filename):

@@ -27,7 +27,7 @@
 > - [ROADMAP.md](ROADMAP.md): Discover our path to v1.0.0.
 > - [AUDIT.md](AUDIT.md): Complete security, performance, and maintainability audit report.
 
-## 📦 Supported Providers (v6.1.3)
+## 📦 Supported Providers
 
 Official support for 33 major providers:
 
