@@ -31,8 +31,7 @@ impl OidcProvider {
         redirect_url: String,
     ) -> Result<Self, ConnectError> {
         let client: Arc<dyn HttpClient> = Arc::new(ReqwestClient::new());
-        Self::discover_with_client(issuer_url, client_id, client_secret, redirect_url, client)
-            .await
+        Self::discover_with_client(issuer_url, client_id, client_secret, redirect_url, client).await
     }
 
     /// Internal method that performs OIDC discovery using a provided HTTP client.
