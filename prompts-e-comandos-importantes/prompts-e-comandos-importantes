@@ -1,0 +1,18 @@
+Windows PowerShell:
+
+
+cargo clean ; cargo test --all-features
+
+cargo clippy --all-features --fix
+
+
+
+
+
+
+Linux Terminal:
+
+
+cargo clean && cargo test --all-features
+
+cargo clippy --all-features --fix
