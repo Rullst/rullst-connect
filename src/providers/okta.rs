@@ -1,15 +1,19 @@
+use crate::client::{HttpClient, HttpClientExt};
 use crate::error::ConnectError;
 use crate::provider::Provider;
 use crate::user::ConnectUser;
 use async_trait::async_trait;
 use serde_json::Value;
 
+static DEFAULT_CLIENT: ::std::sync::LazyLock<::std::sync::Arc<dyn crate::client::HttpClient>> =
+    ::std::sync::LazyLock::new(|| ::std::sync::Arc::new(crate::client::ReqwestClient::new()));
+
 pub struct OktaProvider {
     client_id: String,
     client_secret: String,
     redirect_url: String,
     domain: String,
-    http_client: reqwest::Client,
+    http_client: ::std::sync::Arc<dyn crate::client::HttpClient>,
     scopes: Vec<String>,
     state: Option<String>,
     pkce_challenge: Option<String>,
@@ -28,7 +32,7 @@ impl OktaProvider {
             client_secret,
             redirect_url,
             domain,
-            http_client: reqwest::Client::new(),
+            http_client: DEFAULT_CLIENT.clone(),
             scopes: vec![
                 "openid".to_string(),
                 "profile".to_string(),
@@ -51,6 +55,11 @@ impl OktaProvider {
 
     pub fn with_pkce(mut self, challenge: &str) -> Self {
         self.pkce_challenge = Some(challenge.to_string());
+        self
+    }
+
+    pub fn with_http_client(mut self, client: ::std::sync::Arc<dyn crate::client::HttpClient>) -> Self {
+        self.http_client = client;
         self
     }
 }
@@ -115,14 +124,8 @@ impl Provider for OktaProvider {
             .await?;
 
         Ok(ConnectUser {
-            id: user_res["sub"]
-                .as_str()
-                .map(String::from)
-                .unwrap_or_default(),
-            name: user_res["name"]
-                .as_str()
-                .map(String::from)
-                .unwrap_or_default(),
+            id: user_res["sub"].as_str().map(String::from).unwrap_or_default(),
+            name: user_res["name"].as_str().map(String::from).unwrap_or_default(),
             email: user_res["email"].as_str().map(|s: &str| s.to_string()),
             avatar_url: user_res["picture"].as_str().map(|s: &str| s.to_string()),
             email_verified: user_res["email_verified"].as_bool(),
@@ -154,7 +157,7 @@ impl Provider for OktaProvider {
             .await?;
 
         if let Some(err) = token_res["error"].as_str() {
-            let err_desc = token_res["error_description"].as_str().unwrap_or("");
+            let err_desc = token_res["error_description"].as_str().unwrap_or_default();
             return Err(ConnectError::Token(format!(
                 "Provider returned error: {} - {}",
                 err, err_desc
@@ -173,5 +176,25 @@ impl Provider for OktaProvider {
             .as_u64()
             .or_else(|| token_res["expires_in"].as_i64().map(|v| v as u64));
         Ok(user)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_okta_redirect_url() {
+        let provider = OktaProvider::new(
+            "client_id".to_string(),
+            "client_secret".to_string(),
+            "https://redirect.url".to_string(),
+            "dev-123456.okta.com".to_string(),
+        );
+
+        let url = provider.redirect_url();
+        assert!(url.starts_with("https://dev-123456.okta.com/oauth2/v1/authorize?"));
+        assert!(url.contains("client_id=client_id"));
+        assert!(url.contains("redirect_uri=https%3A%2F%2Fredirect.url"));
     }
 }

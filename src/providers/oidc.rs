@@ -254,3 +254,135 @@ impl Provider for OidcProvider {
         self.token_endpoint.clone()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    use std::sync::{Arc, Mutex};
+
+    struct MockOidcClient {
+        config_body: Value,
+        jwks_body: Value,
+        captured_urls: Mutex<Vec<String>>,
+    }
+
+    #[async_trait]
+    impl HttpClient for MockOidcClient {
+        async fn execute(
+            &self,
+            req: crate::client::HttpRequest,
+        ) -> Result<crate::client::HttpResponse, crate::error::ConnectError> {
+            self.captured_urls.lock().unwrap().push(req.url.clone());
+            if req.url.contains("openid-configuration") {
+                Ok(crate::client::HttpResponse {
+                    status: 200,
+                    body: self.config_body.clone(),
+                })
+            } else if req.url.contains("jwks") {
+                Ok(crate::client::HttpResponse {
+                    status: 200,
+                    body: self.jwks_body.clone(),
+                })
+            } else {
+                Err(crate::error::ConnectError::Provider("Not found".to_string()))
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_oidc_discover_success_with_slash() {
+        let mock_client = Arc::new(MockOidcClient {
+            config_body: json!({
+                "authorization_endpoint": "https://auth.com/authorize",
+                "token_endpoint": "https://auth.com/token",
+                "userinfo_endpoint": "https://auth.com/userinfo",
+                "jwks_uri": "https://auth.com/jwks",
+                "issuer": "https://issuer.com"
+            }),
+            jwks_body: json!({
+                "keys": []
+            }),
+            captured_urls: Mutex::new(vec![]),
+        });
+
+        // Test with trailing slash
+        let _provider = OidcProvider::discover(
+            "https://issuer.com/",
+            "client_id".to_string(),
+            "client_secret".to_string(),
+            "https://redirect.url".to_string(),
+        )
+        .await
+        .unwrap()
+        .with_http_client(mock_client.clone());
+
+        let urls = mock_client.captured_urls.lock().unwrap();
+        assert_eq!(urls[0], "https://issuer.com/.well-known/openid-configuration");
+        assert_eq!(urls[1], "https://auth.com/jwks");
+    }
+
+    #[tokio::test]
+    async fn test_oidc_discover_success_no_slash() {
+        let mock_client = Arc::new(MockOidcClient {
+            config_body: json!({
+                "authorization_endpoint": "https://auth.com/authorize",
+                "token_endpoint": "https://auth.com/token",
+                "userinfo_endpoint": "https://auth.com/userinfo",
+                "jwks_uri": "https://auth.com/jwks",
+                "issuer": "https://issuer.com"
+            }),
+            jwks_body: json!({
+                "keys": []
+            }),
+            captured_urls: Mutex::new(vec![]),
+        });
+
+        // Test without trailing slash
+        let _provider = OidcProvider::discover(
+            "https://issuer.com",
+            "client_id".to_string(),
+            "client_secret".to_string(),
+            "https://redirect.url".to_string(),
+        )
+        .await
+        .unwrap()
+        .with_http_client(mock_client.clone());
+
+        let urls = mock_client.captured_urls.lock().unwrap();
+        assert_eq!(urls[0], "https://issuer.com/.well-known/openid-configuration");
+        assert_eq!(urls[1], "https://auth.com/jwks");
+    }
+
+    #[tokio::test]
+    async fn test_oidc_discover_missing_token_endpoint() {
+        let mock_client = Arc::new(MockOidcClient {
+            config_body: json!({
+                "authorization_endpoint": "https://auth.com/authorize",
+                "userinfo_endpoint": "https://auth.com/userinfo",
+                "jwks_uri": "https://auth.com/jwks",
+                "issuer": "https://issuer.com"
+            }),
+            jwks_body: json!({
+                "keys": []
+            }),
+            captured_urls: Mutex::new(vec![]),
+        });
+
+        let res = OidcProvider::discover(
+            "https://issuer.com",
+            "client_id".to_string(),
+            "client_secret".to_string(),
+            "https://redirect.url".to_string(),
+        )
+        .await;
+
+        assert!(res.is_err());
+        match res.unwrap_err() {
+            crate::error::ConnectError::Provider(msg) => {
+                assert!(msg.contains("Missing token_endpoint"));
+            }
+            _ => panic!("Expected Provider error"),
+        }
+    }
+}

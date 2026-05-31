@@ -1,10 +1,82 @@
-use crate::client::HttpClientExt;
+use crate::client::{HttpClient, HttpClientExt};
 use crate::provider::Provider;
 use crate::user::ConnectUser;
 use async_trait::async_trait;
 use serde_json::Value;
+use tokio::sync::OnceCell;
 
-crate::define_provider!(GoogleProvider, "openid", "profile", "email");
+static DEFAULT_CLIENT: ::std::sync::LazyLock<::std::sync::Arc<dyn crate::client::HttpClient>> =
+    ::std::sync::LazyLock::new(|| ::std::sync::Arc::new(crate::client::ReqwestClient::new()));
+
+pub struct GoogleProvider {
+    pub(crate) client_id: String,
+    pub(crate) client_secret: String,
+    pub(crate) redirect_url: String,
+    pub(crate) http_client: ::std::sync::Arc<dyn crate::client::HttpClient>,
+    pub(crate) scopes: Vec<String>,
+    pub(crate) state: Option<String>,
+    pub(crate) pkce_challenge: Option<String>,
+    pub(crate) jwks: OnceCell<jsonwebtoken::jwk::JwkSet>,
+}
+
+impl GoogleProvider {
+    pub fn new(client_id: String, client_secret: String, redirect_url: String) -> Self {
+        debug_assert!(!client_id.is_empty(), "Socialite Error: client_id cannot be empty");
+        debug_assert!(!client_secret.is_empty(), "Socialite Error: client_secret cannot be empty");
+        debug_assert!(redirect_url.starts_with("http"), "Socialite Error: redirect_url must be a valid HTTP/HTTPS URL");
+
+        Self {
+            client_id,
+            client_secret,
+            redirect_url,
+            http_client: DEFAULT_CLIENT.clone(),
+            scopes: vec!["openid".to_string(), "profile".to_string(), "email".to_string()],
+            state: None,
+            pkce_challenge: None,
+            jwks: OnceCell::new(),
+        }
+    }
+
+    pub fn with_scopes(mut self, scopes: &[&str]) -> Self {
+        self.scopes = scopes.iter().map(|s| s.to_string()).collect();
+        self
+    }
+
+    pub fn with_state(mut self, state: &str) -> Self {
+        self.state = Some(state.to_string());
+        self
+    }
+
+    pub fn with_pkce(mut self, challenge: &str) -> Self {
+        self.pkce_challenge = Some(challenge.to_string());
+        self
+    }
+
+    pub fn with_http_client(mut self, client: ::std::sync::Arc<dyn crate::client::HttpClient>) -> Self {
+        self.http_client = client;
+        self
+    }
+
+    #[cfg(feature = "retry")]
+    pub fn with_retry(mut self, max_retries: u32) -> Self {
+        self.http_client = ::std::sync::Arc::new(crate::client::ReqwestClient::new_with_retry(max_retries));
+        self
+    }
+
+    async fn get_jwks(&self) -> Result<&jsonwebtoken::jwk::JwkSet, crate::error::ConnectError> {
+        self.jwks.get_or_try_init(|| async {
+            let res = self
+                .http_client
+                .get("https://www.googleapis.com/oauth2/v3/certs")
+                .send()
+                .await?
+                .error_for_status()?
+                .json::<jsonwebtoken::jwk::JwkSet>()
+                .await?;
+            Ok(res)
+        }).await
+    }
+}
 
 #[async_trait]
 impl Provider for GoogleProvider {
@@ -45,40 +117,45 @@ impl Provider for GoogleProvider {
         })?;
 
         let mut user = if let Some(id_token) = token_res["id_token"].as_str() {
-            // OIDC FAST PATH: Decode id_token directly without making a second HTTP request!
-            let parts: Vec<&str> = id_token.split('.').collect();
-            if parts.len() == 3 {
-                use base64::Engine;
-                if let Ok(payload_bytes) =
-                    base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(parts[1])
-                {
-                    if let Ok(payload) = serde_json::from_slice::<Value>(&payload_bytes) {
-                        ConnectUser {
-                            id: payload["sub"]
-                                .as_str()
-                                .map(String::from)
-                                .unwrap_or_default(),
-                            name: payload["name"]
-                                .as_str()
-                                .map(String::from)
-                                .unwrap_or_default(),
-                            email: payload["email"].as_str().map(|s: &str| s.to_string()),
-                            avatar_url: payload["picture"]
-                                .as_str()
-                                .map(|s: &str| s.replace("=s96-c", "=s400-c")),
-                            email_verified: payload["email_verified"].as_bool(),
-                            raw_data: payload,
-                            access_token: access_token.to_string(),
-                            refresh_token: None,
-                            expires_in: None,
+            // Secure OIDC: Verify the signature of Google's id_token
+            let mut payload: Option<Value> = None;
+            if let Ok(header) = jsonwebtoken::decode_header(id_token) {
+                let kid = header.kid.unwrap_or_default();
+                if let Some(jwks) = self.get_jwks().await.ok() {
+                    if let Some(jwk) = jwks.find(&kid) {
+                        if let Ok(decoding_key) = jsonwebtoken::DecodingKey::from_jwk(jwk) {
+                            let mut validation = jsonwebtoken::Validation::new(header.alg);
+                            validation.set_audience(&[&self.client_id]);
+                            validation.set_issuer(&["https://accounts.google.com", "accounts.google.com"]);
+                            validation.validate_exp = true;
+
+                            if let Ok(token_data) =
+                                jsonwebtoken::decode::<Value>(id_token, &decoding_key, &validation)
+                            {
+                                payload = Some(token_data.claims);
+                            }
                         }
-                    } else {
-                        self.get_user_from_token(access_token).await?
                     }
-                } else {
-                    self.get_user_from_token(access_token).await?
+                }
+            }
+
+            if let Some(p) = payload {
+                ConnectUser {
+                    id: p["sub"].as_str().map(String::from).unwrap_or_default(),
+                    name: p["name"].as_str().map(String::from).unwrap_or_default(),
+                    email: p["email"].as_str().map(|s: &str| s.to_string()),
+                    avatar_url: p["picture"]
+                        .as_str()
+                        .map(|s: &str| s.replace("=s96-c", "=s400-c")),
+                    email_verified: p["email_verified"].as_bool(),
+                    raw_data: p,
+                    access_token: access_token.to_string(),
+                    refresh_token: None,
+                    expires_in: None,
                 }
             } else {
+                // If signature validation fails, log & fallback to secure /userinfo endpoint
+                tracing::warn!("Google id_token validation failed, falling back to secure userinfo request");
                 self.get_user_from_token(access_token).await?
             }
         } else {
@@ -110,14 +187,8 @@ impl Provider for GoogleProvider {
             .await?;
 
         Ok(ConnectUser {
-            id: user_res["sub"]
-                .as_str()
-                .map(String::from)
-                .unwrap_or_default(),
-            name: user_res["name"]
-                .as_str()
-                .map(String::from)
-                .unwrap_or_default(),
+            id: user_res["sub"].as_str().map(String::from).unwrap_or_default(),
+            name: user_res["name"].as_str().map(String::from).unwrap_or_default(),
             email: user_res["email"].as_str().map(|s: &str| s.to_string()),
             avatar_url: user_res["picture"]
                 .as_str()
@@ -164,7 +235,7 @@ impl Provider for GoogleProvider {
             .await?;
 
         if let Some(err) = token_res["error"].as_str() {
-            let err_desc = token_res["error_description"].as_str().unwrap_or("");
+            let err_desc = token_res["error_description"].as_str().unwrap_or_default();
             return Err(crate::error::ConnectError::Token(format!(
                 "Provider returned error: {} - {}",
                 err, err_desc
@@ -183,5 +254,25 @@ impl Provider for GoogleProvider {
             .as_u64()
             .or_else(|| token_res["expires_in"].as_i64().map(|v| v as u64));
         Ok(user)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::provider::Provider;
+
+    #[test]
+    fn test_google_redirect_url() {
+        let provider = GoogleProvider::new(
+            "client_id".to_string(),
+            "client_secret".to_string(),
+            "https://redirect.url".to_string(),
+        );
+
+        let url = provider.redirect_url();
+        assert!(url.starts_with("https://accounts.google.com/o/oauth2/v2/auth?"));
+        assert!(url.contains("client_id=client_id"));
+        assert!(url.contains("redirect_uri=https%3A%2F%2Fredirect.url"));
     }
 }
