@@ -385,12 +385,12 @@ mod tests {
         )
         .await;
 
-        assert!(res.is_err());
-        match res.unwrap_err() {
-            crate::error::ConnectError::Provider(msg) => {
+        match res {
+            Err(crate::error::ConnectError::Provider(msg)) => {
                 assert!(msg.contains("Missing token_endpoint"));
             }
-            _ => panic!("Expected Provider error"),
+            Err(_) => panic!("Expected Provider error variant"),
+            Ok(_) => panic!("Expected an error, but discover succeeded"),
         }
     }
 }
