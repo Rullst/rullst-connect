@@ -21,16 +21,29 @@ pub struct GoogleProvider {
 
 impl GoogleProvider {
     pub fn new(client_id: String, client_secret: String, redirect_url: String) -> Self {
-        debug_assert!(!client_id.is_empty(), "Socialite Error: client_id cannot be empty");
-        debug_assert!(!client_secret.is_empty(), "Socialite Error: client_secret cannot be empty");
-        debug_assert!(redirect_url.starts_with("http"), "Socialite Error: redirect_url must be a valid HTTP/HTTPS URL");
+        debug_assert!(
+            !client_id.is_empty(),
+            "Socialite Error: client_id cannot be empty"
+        );
+        debug_assert!(
+            !client_secret.is_empty(),
+            "Socialite Error: client_secret cannot be empty"
+        );
+        debug_assert!(
+            redirect_url.starts_with("http"),
+            "Socialite Error: redirect_url must be a valid HTTP/HTTPS URL"
+        );
 
         Self {
             client_id,
             client_secret,
             redirect_url,
             http_client: DEFAULT_CLIENT.clone(),
-            scopes: vec!["openid".to_string(), "profile".to_string(), "email".to_string()],
+            scopes: vec![
+                "openid".to_string(),
+                "profile".to_string(),
+                "email".to_string(),
+            ],
             state: None,
             pkce_challenge: None,
             jwks: OnceCell::new(),
@@ -52,29 +65,35 @@ impl GoogleProvider {
         self
     }
 
-    pub fn with_http_client(mut self, client: ::std::sync::Arc<dyn crate::client::HttpClient>) -> Self {
+    pub fn with_http_client(
+        mut self,
+        client: ::std::sync::Arc<dyn crate::client::HttpClient>,
+    ) -> Self {
         self.http_client = client;
         self
     }
 
     #[cfg(feature = "retry")]
     pub fn with_retry(mut self, max_retries: u32) -> Self {
-        self.http_client = ::std::sync::Arc::new(crate::client::ReqwestClient::new_with_retry(max_retries));
+        self.http_client =
+            ::std::sync::Arc::new(crate::client::ReqwestClient::new_with_retry(max_retries));
         self
     }
 
     async fn get_jwks(&self) -> Result<&jsonwebtoken::jwk::JwkSet, crate::error::ConnectError> {
-        self.jwks.get_or_try_init(|| async {
-            let res = self
-                .http_client
-                .get("https://www.googleapis.com/oauth2/v3/certs")
-                .send()
-                .await?
-                .error_for_status()?
-                .json::<jsonwebtoken::jwk::JwkSet>()
-                .await?;
-            Ok(res)
-        }).await
+        self.jwks
+            .get_or_try_init(|| async {
+                let res = self
+                    .http_client
+                    .get("https://www.googleapis.com/oauth2/v3/certs")
+                    .send()
+                    .await?
+                    .error_for_status()?
+                    .json::<jsonwebtoken::jwk::JwkSet>()
+                    .await?;
+                Ok(res)
+            })
+            .await
     }
 }
 
@@ -123,18 +142,19 @@ impl Provider for GoogleProvider {
                 let kid = header.kid.unwrap_or_default();
                 if let Ok(jwks) = self.get_jwks().await
                     && let Some(jwk) = jwks.find(&kid)
-                        && let Ok(decoding_key) = jsonwebtoken::DecodingKey::from_jwk(jwk) {
-                            let mut validation = jsonwebtoken::Validation::new(header.alg);
-                            validation.set_audience(&[&self.client_id]);
-                            validation.set_issuer(&["https://accounts.google.com", "accounts.google.com"]);
-                            validation.validate_exp = true;
+                    && let Ok(decoding_key) = jsonwebtoken::DecodingKey::from_jwk(jwk)
+                {
+                    let mut validation = jsonwebtoken::Validation::new(header.alg);
+                    validation.set_audience(&[&self.client_id]);
+                    validation.set_issuer(&["https://accounts.google.com", "accounts.google.com"]);
+                    validation.validate_exp = true;
 
-                            if let Ok(token_data) =
-                                jsonwebtoken::decode::<Value>(id_token, &decoding_key, &validation)
-                            {
-                                payload = Some(token_data.claims);
-                            }
-                        }
+                    if let Ok(token_data) =
+                        jsonwebtoken::decode::<Value>(id_token, &decoding_key, &validation)
+                    {
+                        payload = Some(token_data.claims);
+                    }
+                }
             }
 
             if let Some(p) = payload {
@@ -153,7 +173,9 @@ impl Provider for GoogleProvider {
                 }
             } else {
                 // If signature validation fails, log & fallback to secure /userinfo endpoint
-                tracing::warn!("Google id_token validation failed, falling back to secure userinfo request");
+                tracing::warn!(
+                    "Google id_token validation failed, falling back to secure userinfo request"
+                );
                 self.get_user_from_token(access_token).await?
             }
         } else {
@@ -185,8 +207,14 @@ impl Provider for GoogleProvider {
             .await?;
 
         Ok(ConnectUser {
-            id: user_res["sub"].as_str().map(String::from).unwrap_or_default(),
-            name: user_res["name"].as_str().map(String::from).unwrap_or_default(),
+            id: user_res["sub"]
+                .as_str()
+                .map(String::from)
+                .unwrap_or_default(),
+            name: user_res["name"]
+                .as_str()
+                .map(String::from)
+                .unwrap_or_default(),
             email: user_res["email"].as_str().map(|s: &str| s.to_string()),
             avatar_url: user_res["picture"]
                 .as_str()

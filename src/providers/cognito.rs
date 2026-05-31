@@ -61,7 +61,10 @@ impl CognitoProvider {
         self
     }
 
-    pub fn with_http_client(mut self, client: ::std::sync::Arc<dyn crate::client::HttpClient>) -> Self {
+    pub fn with_http_client(
+        mut self,
+        client: ::std::sync::Arc<dyn crate::client::HttpClient>,
+    ) -> Self {
         self.http_client = client;
         self
     }
@@ -123,7 +126,10 @@ impl Provider for CognitoProvider {
             .await?;
 
         Ok(ConnectUser {
-            id: user_res["sub"].as_str().map(String::from).unwrap_or_default(),
+            id: user_res["sub"]
+                .as_str()
+                .map(String::from)
+                .unwrap_or_default(),
             name: user_res["name"]
                 .as_str()
                 .or_else(|| user_res["username"].as_str())
@@ -196,7 +202,9 @@ mod tests {
         );
 
         let url = provider.redirect_url();
-        assert!(url.starts_with("https://my-domain.auth.us-east-1.amazoncognito.com/oauth2/authorize?"));
+        assert!(
+            url.starts_with("https://my-domain.auth.us-east-1.amazoncognito.com/oauth2/authorize?")
+        );
         assert!(url.contains("client_id=client_id"));
         assert!(url.contains("redirect_uri=https%3A%2F%2Fredirect.url"));
     }

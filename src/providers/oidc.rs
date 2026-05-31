@@ -285,7 +285,9 @@ mod tests {
                     body: self.jwks_body.clone(),
                 })
             } else {
-                Err(crate::error::ConnectError::Provider("Not found".to_string()))
+                Err(crate::error::ConnectError::Provider(
+                    "Not found".to_string(),
+                ))
             }
         }
     }
@@ -318,7 +320,10 @@ mod tests {
         .with_http_client(mock_client.clone());
 
         let urls = mock_client.captured_urls.lock().unwrap();
-        assert_eq!(urls[0], "https://issuer.com/.well-known/openid-configuration");
+        assert_eq!(
+            urls[0],
+            "https://issuer.com/.well-known/openid-configuration"
+        );
         assert_eq!(urls[1], "https://auth.com/jwks");
     }
 
@@ -350,7 +355,10 @@ mod tests {
         .with_http_client(mock_client.clone());
 
         let urls = mock_client.captured_urls.lock().unwrap();
-        assert_eq!(urls[0], "https://issuer.com/.well-known/openid-configuration");
+        assert_eq!(
+            urls[0],
+            "https://issuer.com/.well-known/openid-configuration"
+        );
         assert_eq!(urls[1], "https://auth.com/jwks");
     }
 
