@@ -7,7 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [6.2.0] - 2026-05-31
+## [6.2.0] - 2026-06-01
+
+### Security & Architecture
+- **Dependency Shielding (Blindagem de Dependências)**: Fully isolated the public API from external dependency leaks to protect downstream users from unexpected breaking changes:
+  - Refactored `ConnectError` to hold stringified errors (`String`) instead of raw third-party types (`reqwest::Error`, `jsonwebtoken::errors::Error`, `base64::DecodeError`, etc.).
+  - Implemented manual `From` conversions for internal convenience of the `?` operator without exposing raw types to consumers.
+  - Restricted the visibility of the `jwks` field in `OidcProvider` from `pub` to `pub(crate)` to avoid leaking `jsonwebtoken::jwk::JwkSet` to consumers.
 
 ### Security
 - **Cryptographic JWT Validation — Apple Provider**: `AppleProvider` now lazily fetches Apple's public JWKS from `https://appleid.apple.com/auth/keys` (cached via `tokio::sync::OnceCell`) and cryptographically verifies the `id_token` signature and claims on every login. Removes the previous unverified base64-decode approach.

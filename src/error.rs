@@ -4,19 +4,19 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 pub enum ConnectError {
     #[error("HTTP request failed: {0}")]
-    Reqwest(#[from] reqwest::Error),
+    Reqwest(String),
 
     #[error("Failed to parse JSON: {0}")]
-    Json(#[from] serde_json::Error),
+    Json(String),
 
     #[error("Failed to decode Base64: {0}")]
-    Base64(#[from] base64::DecodeError),
+    Base64(String),
 
     #[error("JWT processing failed: {0}")]
-    Jwt(#[from] jsonwebtoken::errors::Error),
+    Jwt(String),
 
     #[error("System time error: {0}")]
-    Time(#[from] std::time::SystemTimeError),
+    Time(String),
 
     #[error("Missing token or unexpected response: {0}")]
     Token(String),
@@ -29,4 +29,34 @@ pub enum ConnectError {
 
     #[error("Invalid CSRF state: {0}")]
     InvalidState(String),
+}
+
+impl From<reqwest::Error> for ConnectError {
+    fn from(err: reqwest::Error) -> Self {
+        ConnectError::Reqwest(err.to_string())
+    }
+}
+
+impl From<serde_json::Error> for ConnectError {
+    fn from(err: serde_json::Error) -> Self {
+        ConnectError::Json(err.to_string())
+    }
+}
+
+impl From<base64::DecodeError> for ConnectError {
+    fn from(err: base64::DecodeError) -> Self {
+        ConnectError::Base64(err.to_string())
+    }
+}
+
+impl From<jsonwebtoken::errors::Error> for ConnectError {
+    fn from(err: jsonwebtoken::errors::Error) -> Self {
+        ConnectError::Jwt(err.to_string())
+    }
+}
+
+impl From<std::time::SystemTimeError> for ConnectError {
+    fn from(err: std::time::SystemTimeError) -> Self {
+        ConnectError::Time(err.to_string())
+    }
 }

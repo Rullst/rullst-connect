@@ -18,7 +18,7 @@ pub struct OidcProvider {
     pub authorization_endpoint: String,
     pub token_endpoint: String,
     pub userinfo_endpoint: String,
-    pub jwks: jsonwebtoken::jwk::JwkSet,
+    pub(crate) jwks: jsonwebtoken::jwk::JwkSet,
     pub issuer: String,
 }
 

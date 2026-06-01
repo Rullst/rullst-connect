@@ -239,7 +239,7 @@ impl HttpClient for ReqwestClient {
             builder
                 .send()
                 .await
-                .map_err(crate::error::ConnectError::Reqwest)?
+                .map_err(crate::error::ConnectError::from)?
         };
 
         #[cfg(feature = "retry")]
@@ -275,7 +275,7 @@ impl HttpClient for ReqwestClient {
 
             builder.send().await.map_err(|e| {
                 if let reqwest_middleware::Error::Reqwest(err) = e {
-                    crate::error::ConnectError::Reqwest(err)
+                    crate::error::ConnectError::Reqwest(err.to_string())
                 } else {
                     crate::error::ConnectError::Provider(e.to_string())
                 }
@@ -287,7 +287,7 @@ impl HttpClient for ReqwestClient {
         let text = res
             .text()
             .await
-            .map_err(crate::error::ConnectError::Reqwest)?;
+            .map_err(crate::error::ConnectError::from)?;
         let body = serde_json::from_str(&text).unwrap_or(Value::String(text));
 
         Ok(HttpResponse { status, body })
