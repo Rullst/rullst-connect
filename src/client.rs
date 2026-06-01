@@ -284,10 +284,7 @@ impl HttpClient for ReqwestClient {
         let status = res.status().as_u16();
         tracing::debug!(status = %status, "Received HTTP response");
         // Read body as text first in case it's not JSON
-        let text = res
-            .text()
-            .await
-            .map_err(crate::error::ConnectError::from)?;
+        let text = res.text().await.map_err(crate::error::ConnectError::from)?;
         let body = serde_json::from_str(&text).unwrap_or(Value::String(text));
 
         Ok(HttpResponse { status, body })
