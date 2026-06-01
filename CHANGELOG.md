@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [6.2.0] - 2026-06-01
+## [7.0.0] - 2026-06-01
 
 ### Security & Architecture
 - **Dependency Shielding (Blindagem de Dependências)**: Fully isolated the public API from external dependency leaks to protect downstream users from unexpected breaking changes:

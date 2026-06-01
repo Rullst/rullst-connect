@@ -8,7 +8,7 @@
 [![CI Build](https://github.com/venelouis/rullst-connect/actions/workflows/ci.yml/badge.svg)](https://github.com/venelouis/rullst-connect/actions/workflows/ci.yml)
 [![Publish](https://github.com/venelouis/rullst-connect/actions/workflows/publish.yml/badge.svg)](https://github.com/venelouis/rullst-connect/actions)
 [![Audit: 10/10](https://img.shields.io/badge/Audit-10%2F10-success.svg)](AUDIT.md)
-[![Zero Panics](https://img.shields.io/badge/Panics-0-success.svg)](SECURITY_AUDIT.md)
+[![Zero Panics](https://img.shields.io/badge/Panics-0-success.svg)](AUDIT.md)
 
 **Rullst Connect** is an elegant, async-first, and Developer Experience (DX) focused OAuth2 authentication library for Rust, heavily inspired by Laravel Socialite. It simplifies the integration of social logins into your Rust web applications, providing a standardized interface across multiple providers.
 
@@ -23,8 +23,8 @@
 - 🛠️ **Testing**: Embedded Mock IdP router for seamless offline local E2E testing.
 
 > 📚 **Important Documents:**
-> - [CHANGELOG.md](CHANGELOG.md): See what's new in v6.1.2.
-> - [ROADMAP.md](ROADMAP.md): Discover our path to v1.0.0.
+> - [CHANGELOG.md](CHANGELOG.md): See what's new.
+> - [ROADMAP.md](ROADMAP.md): Discover our path.
 > - [AUDIT.md](AUDIT.md): Complete security, performance, and maintainability audit report.
 
 ## 📦 Supported Providers

@@ -1,4 +1,4 @@
-# Relatório de Auditoria e Correções — Rullst Connect (v6.2.1)
+# Relatório de Auditoria e Correções — Rullst Connect (v7.0.0)
 
 Este documento registra os resultados da auditoria completa de segurança, qualidade e arquitetura no repositório `rullst-connect` (v6.2.0), detalhando todas as ações corretivas tomadas para implementar o padrão **Dependency Shielding** (Blindagem de Dependências) na API pública da biblioteca.
 
