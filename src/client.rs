@@ -284,22 +284,27 @@ impl HttpClient for ReqwestClient {
         };
         let status = res.status().as_u16();
         tracing::debug!(status = %status, "Received HTTP response");
-        
+
         // Read body chunk by chunk up to 2MB to prevent memory exhaustion / DoS
         let mut body_bytes = Vec::new();
         const MAX_BODY_SIZE: usize = 2 * 1024 * 1024; // 2MB limit
-        
-        while let Some(chunk) = res.chunk().await.map_err(crate::error::ConnectError::from)? {
+
+        while let Some(chunk) = res
+            .chunk()
+            .await
+            .map_err(crate::error::ConnectError::from)?
+        {
             if body_bytes.len() + chunk.len() > MAX_BODY_SIZE {
                 return Err(crate::error::ConnectError::Provider(
-                    "Response body size limit exceeded".to_string()
+                    "Response body size limit exceeded".to_string(),
                 ));
             }
             body_bytes.extend_from_slice(&chunk);
         }
-        
-        let text = String::from_utf8(body_bytes)
-            .map_err(|e| crate::error::ConnectError::Provider(format!("Response body is not valid UTF-8: {}", e)))?;
+
+        let text = String::from_utf8(body_bytes).map_err(|e| {
+            crate::error::ConnectError::Provider(format!("Response body is not valid UTF-8: {}", e))
+        })?;
         let body = serde_json::from_str(&text).unwrap_or(Value::String(text));
 
         Ok(HttpResponse { status, body })

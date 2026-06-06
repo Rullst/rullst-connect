@@ -66,7 +66,9 @@ impl Provider for PinterestProvider {
             id: user_res["username"]
                 .as_str()
                 .map(String::from)
-                .ok_or_else(|| crate::error::ConnectError::Provider("Missing user id".to_string()))?,
+                .ok_or_else(|| {
+                    crate::error::ConnectError::Provider("Missing user id".to_string())
+                })?,
             name: user_res["username"]
                 .as_str()
                 .map(String::from)

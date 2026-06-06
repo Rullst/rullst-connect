@@ -70,7 +70,9 @@ impl Provider for LineProvider {
             id: user_res["userId"]
                 .as_str()
                 .map(String::from)
-                .ok_or_else(|| crate::error::ConnectError::Provider("Missing user id".to_string()))?,
+                .ok_or_else(|| {
+                    crate::error::ConnectError::Provider("Missing user id".to_string())
+                })?,
             name: user_res["displayName"]
                 .as_str()
                 .map(String::from)

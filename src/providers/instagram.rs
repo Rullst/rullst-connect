@@ -67,10 +67,9 @@ impl Provider for InstagramProvider {
             .await?;
 
         Ok(ConnectUser {
-            id: user_res["id"]
-                .as_str()
-                .map(String::from)
-                .ok_or_else(|| crate::error::ConnectError::Provider("Missing user id".to_string()))?,
+            id: user_res["id"].as_str().map(String::from).ok_or_else(|| {
+                crate::error::ConnectError::Provider("Missing user id".to_string())
+            })?,
             name: user_res["username"]
                 .as_str()
                 .map(String::from)
