@@ -176,8 +176,7 @@ impl Provider for OidcProvider {
         let mut user = if let Some(id_token) = token_res["id_token"].as_str() {
             // Cryptographic OIDC Signature Validation
             if let Ok(header) = jsonwebtoken::decode_header(id_token) {
-                let kid = header.kid.unwrap_or_default();
-                if let Some(jwk) = self.jwks.find(&kid) {
+                if let Some(jwk) = header.kid.as_ref().and_then(|kid| self.jwks.find(kid)) {
                     if let Ok(decoding_key) = jsonwebtoken::DecodingKey::from_jwk(jwk) {
                         let mut validation = jsonwebtoken::Validation::new(header.alg);
                         validation.set_audience(&[&self.client_id]);
@@ -189,14 +188,16 @@ impl Provider for OidcProvider {
                         {
                             let payload = token_data.claims;
                             ConnectUser {
-                                id: payload["sub"]
-                                    .as_str()
-                                    .map(String::from)
-                                    .unwrap_or_default(),
-                                name: payload["name"]
-                                    .as_str()
-                                    .map(String::from)
-                                    .unwrap_or_default(),
+                                id: payload["sub"].as_str().map(String::from).ok_or_else(|| {
+                                    ConnectError::Provider("Missing sub in id_token".to_string())
+                                })?,
+                                name: payload["name"].as_str().map(String::from).ok_or_else(
+                                    || {
+                                        ConnectError::Provider(
+                                            "Missing name in id_token".to_string(),
+                                        )
+                                    },
+                                )?,
                                 email: payload["email"].as_str().map(|s: &str| s.to_string()),
                                 avatar_url: payload["picture"]
                                     .as_str()
@@ -236,7 +237,7 @@ impl Provider for OidcProvider {
         let user_res = self
             .http_client
             .get(&self.userinfo_endpoint)
-            .header("Authorization", format!("Bearer {}", access_token))
+            .bearer_auth(access_token)
             .send()
             .await?
             .error_for_status()?
@@ -247,11 +248,11 @@ impl Provider for OidcProvider {
             id: user_res["sub"]
                 .as_str()
                 .map(String::from)
-                .unwrap_or_default(),
+                .ok_or_else(|| ConnectError::Provider("Missing sub in userinfo".to_string()))?,
             name: user_res["name"]
                 .as_str()
                 .map(String::from)
-                .unwrap_or_default(),
+                .ok_or_else(|| ConnectError::Provider("Missing name in userinfo".to_string()))?,
             email: user_res["email"].as_str().map(|s: &str| s.to_string()),
             avatar_url: user_res["picture"].as_str().map(|s: &str| s.to_string()),
             email_verified: user_res["email_verified"].as_bool(),
@@ -271,12 +272,12 @@ impl Provider for OidcProvider {
 mod tests {
     use super::*;
     use serde_json::json;
-    use std::sync::{Arc, Mutex};
+    use std::sync::Arc;
 
     struct MockOidcClient {
         config_body: Value,
         jwks_body: Value,
-        captured_urls: Mutex<Vec<String>>,
+        captured_urls: tokio::sync::Mutex<Vec<String>>,
     }
 
     #[async_trait]
@@ -285,7 +286,7 @@ mod tests {
             &self,
             req: crate::client::HttpRequest,
         ) -> Result<crate::client::HttpResponse, crate::error::ConnectError> {
-            self.captured_urls.lock().unwrap().push(req.url.clone());
+            self.captured_urls.lock().await.push(req.url.clone());
             if req.url.contains("openid-configuration") {
                 Ok(crate::client::HttpResponse {
                     status: 200,
@@ -317,7 +318,7 @@ mod tests {
             jwks_body: json!({
                 "keys": []
             }),
-            captured_urls: Mutex::new(vec![]),
+            captured_urls: tokio::sync::Mutex::new(vec![]),
         });
 
         // Test with trailing slash
@@ -329,9 +330,9 @@ mod tests {
             mock_client.clone(),
         )
         .await
-        .unwrap();
+        .expect("OIDC discovery failed");
 
-        let urls = mock_client.captured_urls.lock().unwrap();
+        let urls = mock_client.captured_urls.lock().await;
         assert_eq!(
             urls[0],
             "https://issuer.com/.well-known/openid-configuration"
@@ -352,7 +353,7 @@ mod tests {
             jwks_body: json!({
                 "keys": []
             }),
-            captured_urls: Mutex::new(vec![]),
+            captured_urls: tokio::sync::Mutex::new(vec![]),
         });
 
         // Test without trailing slash
@@ -364,9 +365,9 @@ mod tests {
             mock_client.clone(),
         )
         .await
-        .unwrap();
+        .expect("OIDC discovery failed");
 
-        let urls = mock_client.captured_urls.lock().unwrap();
+        let urls = mock_client.captured_urls.lock().await;
         assert_eq!(
             urls[0],
             "https://issuer.com/.well-known/openid-configuration"
@@ -386,7 +387,7 @@ mod tests {
             jwks_body: json!({
                 "keys": []
             }),
-            captured_urls: Mutex::new(vec![]),
+            captured_urls: tokio::sync::Mutex::new(vec![]),
         });
 
         let res = OidcProvider::discover_with_client(

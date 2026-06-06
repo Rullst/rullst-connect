@@ -58,10 +58,8 @@ impl Provider for InstagramProvider {
     async fn get_user_from_token(&self, access_token: &str) -> Result<ConnectUser, ConnectError> {
         let user_res = self
             .http_client
-            .get(format!(
-                "https://graph.instagram.com/me?fields=id,username&access_token={}",
-                access_token
-            ))
+            .get("https://graph.instagram.com/me?fields=id,username")
+            .bearer_auth(access_token)
             .send()
             .await?
             .error_for_status()?

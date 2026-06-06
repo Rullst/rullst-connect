@@ -59,7 +59,7 @@ impl Provider for AsanaProvider {
         let user_res = self
             .http_client
             .get("https://app.asana.com/api/1.0/users/me")
-            .header("Authorization", format!("Bearer {}", access_token))
+            .bearer_auth(access_token)
             .send()
             .await?
             .error_for_status()?

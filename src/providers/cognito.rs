@@ -118,7 +118,7 @@ impl Provider for CognitoProvider {
         let user_res = self
             .http_client
             .get(format!("{}/oauth2/userInfo", self.domain))
-            .header("Authorization", format!("Bearer {}", access_token))
+            .bearer_auth(access_token)
             .send()
             .await?
             .error_for_status()?

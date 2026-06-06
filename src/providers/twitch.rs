@@ -58,7 +58,7 @@ impl Provider for TwitchProvider {
         let user_res = self
             .http_client
             .get("https://api.twitch.tv/helix/users")
-            .header("Authorization", format!("Bearer {}", access_token))
+            .bearer_auth(access_token)
             .header("Client-Id", self.client_id.as_str())
             .send()
             .await?

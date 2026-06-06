@@ -58,7 +58,7 @@ impl Provider for BasecampProvider {
         let user_res = self
             .http_client
             .get("https://launchpad.37signals.com/authorization.json")
-            .header("Authorization", format!("Bearer {}", access_token))
+            .bearer_auth(access_token)
             .send()
             .await?
             .error_for_status()?
@@ -74,7 +74,7 @@ impl Provider for BasecampProvider {
             id: identity["id"]
                 .as_i64()
                 .map(|i| i.to_string())
-                .unwrap_or_default(),
+                .ok_or_else(|| ConnectError::Provider("Missing user id".to_string()))?,
             name,
             email: identity["email_address"]
                 .as_str()

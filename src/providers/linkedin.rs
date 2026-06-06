@@ -61,7 +61,7 @@ impl Provider for LinkedinProvider {
         let user_res = self
             .http_client
             .get("https://api.linkedin.com/v2/userinfo")
-            .header("Authorization", format!("Bearer {}", access_token))
+            .bearer_auth(access_token)
             .send()
             .await?
             .error_for_status()?

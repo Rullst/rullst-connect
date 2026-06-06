@@ -57,7 +57,7 @@ impl Provider for PatreonProvider {
 
     async fn get_user_from_token(&self, access_token: &str) -> Result<ConnectUser, ConnectError> {
         let user_res = self.http_client.get("https://www.patreon.com/api/oauth2/v2/identity?fields[user]=email,full_name,image_url")
-            .header("Authorization", format!("Bearer {}", access_token))
+            .bearer_auth(access_token)
             .send().await?.error_for_status()?
             .json::<Value>()
             .await?;
@@ -69,11 +69,11 @@ impl Provider for PatreonProvider {
             id: user_data["id"]
                 .as_str()
                 .map(String::from)
-                .unwrap_or_default(),
+                .ok_or_else(|| ConnectError::Provider("Missing user id".to_string()))?,
             name: attributes["full_name"]
                 .as_str()
                 .map(String::from)
-                .unwrap_or_default(),
+                .ok_or_else(|| ConnectError::Provider("Missing full_name".to_string()))?,
             email: attributes["email"].as_str().map(|s: &str| s.to_string()),
             avatar_url: attributes["image_url"]
                 .as_str()

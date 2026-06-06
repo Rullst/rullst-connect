@@ -56,7 +56,7 @@ impl Provider for TiktokProvider {
 
     async fn get_user_from_token(&self, access_token: &str) -> Result<ConnectUser, ConnectError> {
         let user_res = self.http_client.get("https://open.tiktokapis.com/v2/user/info/?fields=open_id,union_id,avatar_url,display_name")
-            .header("Authorization", format!("Bearer {}", access_token))
+            .bearer_auth(access_token)
             .send().await?.error_for_status()?
             .json::<Value>()
             .await?;

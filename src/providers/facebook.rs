@@ -56,10 +56,8 @@ impl Provider for FacebookProvider {
         &self,
         access_token: &str,
     ) -> Result<ConnectUser, crate::error::ConnectError> {
-        let user_res = self.http_client.get(format!(
-            "https://graph.facebook.com/v19.0/me?fields=id,name,email,picture.width(500).height(500)&access_token={}",
-            access_token
-        ))
+        let user_res = self.http_client.get("https://graph.facebook.com/v19.0/me?fields=id,name,email,picture.width(500).height(500)")
+            .bearer_auth(access_token)
             .send().await?.error_for_status()?
             .json::<Value>()
             .await?;

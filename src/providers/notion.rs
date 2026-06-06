@@ -3,7 +3,6 @@ use crate::error::ConnectError;
 use crate::provider::Provider;
 use crate::user::ConnectUser;
 use async_trait::async_trait;
-use base64::{Engine as _, engine::general_purpose};
 use serde_json::Value;
 
 crate::define_provider!(NotionProvider);
@@ -27,13 +26,10 @@ impl Provider for NotionProvider {
     }
 
     async fn get_user(&self, auth_code: &str) -> Result<ConnectUser, ConnectError> {
-        let credentials = format!("{}:{}", self.client_id, self.client_secret);
-        let encoded_credentials = general_purpose::STANDARD.encode(credentials.as_bytes());
-
         let token_res = self
             .http_client
             .post(self.token_url())
-            .header("Authorization", format!("Basic {}", encoded_credentials))
+            .basic_auth(&self.client_id, Some(&self.client_secret))
             .json(&serde_json::json!({
                 "grant_type": "authorization_code",
                 "code": auth_code,
@@ -50,11 +46,17 @@ impl Provider for NotionProvider {
         let access_token = token_res["access_token"]
             .as_str()
             .map(String::from)
-            .unwrap_or_default();
+            .ok_or_else(|| ConnectError::Provider("Missing access_token".to_string()))?;
 
         Ok(ConnectUser {
-            id: owner["id"].as_str().map(String::from).unwrap_or_default(),
-            name: owner["name"].as_str().map(String::from).unwrap_or_default(),
+            id: owner["id"]
+                .as_str()
+                .map(String::from)
+                .ok_or_else(|| ConnectError::Provider("Missing user id".to_string()))?,
+            name: owner["name"]
+                .as_str()
+                .map(String::from)
+                .ok_or_else(|| ConnectError::Provider("Missing user name".to_string()))?,
             email: owner["person"]["email"]
                 .as_str()
                 .map(|s: &str| s.to_string()),
@@ -75,7 +77,7 @@ impl Provider for NotionProvider {
         let user_res = self
             .http_client
             .get("https://api.notion.com/v1/users/me")
-            .header("Authorization", format!("Bearer {}", access_token))
+            .bearer_auth(access_token)
             .header("Notion-Version", "2022-06-28")
             .send()
             .await?
@@ -89,8 +91,14 @@ impl Provider for NotionProvider {
         };
 
         Ok(ConnectUser {
-            id: user["id"].as_str().map(String::from).unwrap_or_default(),
-            name: user["name"].as_str().map(String::from).unwrap_or_default(),
+            id: user["id"]
+                .as_str()
+                .map(String::from)
+                .ok_or_else(|| ConnectError::Provider("Missing user id".to_string()))?,
+            name: user["name"]
+                .as_str()
+                .map(String::from)
+                .ok_or_else(|| ConnectError::Provider("Missing user name".to_string()))?,
             email: user["person"]["email"]
                 .as_str()
                 .map(|s: &str| s.to_string()),

@@ -58,7 +58,7 @@ impl Provider for GitlabProvider {
         let user_res = self
             .http_client
             .get("https://gitlab.com/api/v4/user")
-            .header("Authorization", format!("Bearer {}", access_token))
+            .bearer_auth(access_token)
             .send()
             .await?
             .error_for_status()?

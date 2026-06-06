@@ -59,7 +59,7 @@ impl Provider for DropboxProvider {
         let user_res = self
             .http_client
             .post("https://api.dropboxapi.com/2/users/get_current_account")
-            .header("Authorization", format!("Bearer {}", access_token))
+            .bearer_auth(access_token)
             .send()
             .await?
             .error_for_status()?

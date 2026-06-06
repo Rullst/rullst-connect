@@ -3,7 +3,6 @@ use crate::error::ConnectError;
 use crate::provider::Provider;
 use crate::user::ConnectUser;
 use async_trait::async_trait;
-use base64::{Engine as _, engine::general_purpose};
 use serde_json::Value;
 
 crate::define_provider!(RedditProvider, "identity");
@@ -27,13 +26,10 @@ impl Provider for RedditProvider {
     }
 
     async fn get_user(&self, auth_code: &str) -> Result<ConnectUser, ConnectError> {
-        let credentials = format!("{}:{}", self.client_id, self.client_secret);
-        let encoded_credentials = general_purpose::STANDARD.encode(credentials.as_bytes());
-
         let token_res = self
             .http_client
             .post(self.token_url())
-            .header("Authorization", format!("Basic {}", encoded_credentials))
+            .basic_auth(&self.client_id, Some(&self.client_secret))
             .form(&[
                 ("grant_type", "authorization_code"),
                 ("code", auth_code),
@@ -63,7 +59,7 @@ impl Provider for RedditProvider {
         let user_res = self
             .http_client
             .get("https://oauth.reddit.com/api/v1/me")
-            .header("Authorization", format!("Bearer {}", access_token))
+            .bearer_auth(access_token)
             .header("User-Agent", "rullst-connect/0.2.1")
             .send()
             .await?

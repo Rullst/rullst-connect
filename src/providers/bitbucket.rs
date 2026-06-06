@@ -61,7 +61,7 @@ impl Provider for BitbucketProvider {
         let user_res = self
             .http_client
             .get("https://api.bitbucket.org/2.0/user")
-            .header("Authorization", format!("Bearer {}", access_token))
+            .bearer_auth(access_token)
             .send()
             .await?
             .error_for_status()?
@@ -71,7 +71,7 @@ impl Provider for BitbucketProvider {
         let emails_res = self
             .http_client
             .get("https://api.bitbucket.org/2.0/user/emails")
-            .header("Authorization", format!("Bearer {}", access_token))
+            .bearer_auth(access_token)
             .send()
             .await?
             .error_for_status()?

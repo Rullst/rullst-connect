@@ -112,3 +112,31 @@ async fn discovery_handler() -> impl IntoResponse {
         "id_token_signing_alg_values_supported": ["RS256", "none"]
     }))
 }
+
+#[cfg(all(test, feature = "axum"))]
+mod tests {
+    use super::*;
+    use axum::response::IntoResponse;
+
+    #[tokio::test]
+    async fn test_token_handler_invalid_code() {
+        let form = TokenForm {
+            client_id: "test".to_string(),
+            client_secret: "test".to_string(),
+            code: "invalid_code_here".to_string(),
+            grant_type: "authorization_code".to_string(),
+            redirect_uri: "http://test".to_string(),
+        };
+
+        let response = token_handler(axum::extract::Form(form))
+            .await
+            .into_response();
+        let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("Failed to read response body bytes");
+        let json: serde_json::Value =
+            serde_json::from_slice(&body_bytes).expect("Failed to parse response body as JSON");
+
+        assert_eq!(json["error"], "invalid_grant");
+    }
+}

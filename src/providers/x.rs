@@ -67,7 +67,7 @@ impl Provider for XProvider {
         let user_res = self
             .http_client
             .get("https://api.twitter.com/2/users/me?user.fields=profile_image_url")
-            .header("Authorization", format!("Bearer {}", access_token))
+            .bearer_auth(access_token)
             .send()
             .await?
             .error_for_status()?
