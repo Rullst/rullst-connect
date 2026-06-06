@@ -74,7 +74,7 @@ impl Provider for ZoomProvider {
             id: user_res["id"]
                 .as_str()
                 .map(String::from)
-                .unwrap_or_default(),
+                .ok_or_else(|| ConnectError::Provider("Missing user id".to_string()))?,
             name,
             email: user_res["email"].as_str().map(|s: &str| s.to_string()),
             avatar_url: user_res["pic_url"].as_str().map(|s: &str| s.to_string()),

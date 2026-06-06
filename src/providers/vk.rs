@@ -23,14 +23,13 @@ impl Provider for VkProvider {
     async fn get_user(&self, auth_code: &str) -> Result<ConnectUser, ConnectError> {
         let token_res = self
             .http_client
-            .get(format!(
-                "{}?client_id={}&client_secret={}&redirect_uri={}&code={}",
-                self.token_url(),
-                self.client_id,
-                self.client_secret,
-                self.redirect_url,
-                auth_code
-            ))
+            .post(self.token_url())
+            .form(&[
+                ("client_id", self.client_id.as_str()),
+                ("client_secret", self.client_secret.as_str()),
+                ("redirect_uri", self.redirect_url.as_str()),
+                ("code", auth_code),
+            ])
             .send()
             .await?
             .error_for_status()?
@@ -65,10 +64,8 @@ impl Provider for VkProvider {
     async fn get_user_from_token(&self, access_token: &str) -> Result<ConnectUser, ConnectError> {
         let user_res = self
             .http_client
-            .get(format!(
-                "https://api.vk.com/method/users.get?fields=photo_200&v=5.131&access_token={}",
-                access_token
-            ))
+            .get("https://api.vk.com/method/users.get?fields=photo_200&v=5.131")
+            .bearer_auth(access_token)
             .send()
             .await?
             .error_for_status()?

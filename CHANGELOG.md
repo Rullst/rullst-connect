@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [7.0.1] - 2026-06-06
+
+### Security
+- **Token Exposure Prevention**: Migrated VK (VKontakte), Facebook, and Instagram providers to use `Authorization: Bearer <token>` HTTP headers instead of exposing `access_token` in URL query parameters, preventing leakage in server logs and proxy caches.
+- **Client Secret Protection**: Migrated VK (VKontakte) token exchange from `GET` to `POST` request with a form body, protecting `client_secret` from URL exposure.
+
+### Resilience & Error Handling
+- **Strict Error Handling**: Eliminated "silent failure" vectors across Microsoft, OIDC, Notion, Basecamp, Zoom, and Patreon providers. Crucial fields like `id` and `access_token` no longer use `.unwrap_or_default()` (which disguised missing API data as empty strings `""`). They now return an explicit `ConnectError::Provider` if the provider fails to deliver essential data.
+- **Graceful JWT Fallback**: Refactored `OidcProvider`'s `id_token` Key ID (`kid`) extraction to use `.and_then()` instead of `.unwrap_or_default()`, ensuring that missing `kid` headers cleanly fall back to the `/userinfo` endpoint instead of searching for an empty key.
+
+### Added
+- **Unit Tests**: Added integration/unit tests for `mock_idp.rs` to guarantee the local mock router properly simulates OAuth2 failure flows (e.g., `invalid_grant` for invalid authorization codes).
+- **Unit Tests**: Added comprehensive tests in `src/error.rs` validating `.into()` conversion from standard library and third-party errors (`reqwest::Error`, `serde_json::Error`) into `ConnectError`.
+
 ## [7.0.0] - 2026-06-01
 
 ### Security & Architecture

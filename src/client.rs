@@ -88,6 +88,7 @@ impl<'a> RequestBuilder<'a> {
         K: AsRef<str>,
         V: AsRef<str>,
     {
+        self.req.form.reserve(form.len());
         for (k, v) in form {
             self.req
                 .form

@@ -24,6 +24,7 @@
 
 > 📚 **Important Documents:**
 > - [CHANGELOG.md](CHANGELOG.md): See what's new.
+> - [ISSUES](https://github.com/venelouis/rullst-connect/issues): Any issue? Please report.
 > - [ROADMAP.md](ROADMAP.md): Discover our path.
 > - [AUDIT.md](AUDIT.md): Complete security, performance, and maintainability audit report.
 

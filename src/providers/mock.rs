@@ -58,3 +58,37 @@ impl Provider for MockProvider {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_mock_provider_revoke_token() {
+        let user = ConnectUser {
+            id: "1".to_string(),
+            name: "Test".to_string(),
+            email: None,
+            avatar_url: None,
+            email_verified: None,
+            raw_data: serde_json::json!({}),
+            access_token: "token".to_string(),
+            refresh_token: None,
+            expires_in: None,
+        };
+        let provider = MockProvider::new(user, "http://mock".to_string());
+
+        // Default is success
+        assert!(provider.revoke_token("token").await.is_ok());
+
+        // Test with revoke success false
+        let provider = provider.with_revoke_success(false);
+        let res = provider.revoke_token("token").await;
+        assert!(res.is_err());
+        if let Err(crate::error::ConnectError::Token(msg)) = res {
+            assert_eq!(msg, "Mocked revocation failure");
+        } else {
+            panic!("Expected ConnectError::Token");
+        }
+    }
+}

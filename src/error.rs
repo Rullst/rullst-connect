@@ -60,3 +60,32 @@ impl From<std::time::SystemTimeError> for ConnectError {
         ConnectError::Time(err.to_string())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_reqwest_error_conversion() {
+        let err = reqwest::Client::new()
+            .get("htt p://invalid")
+            .build()
+            .unwrap_err();
+        let connect_err: ConnectError = err.into();
+        match connect_err {
+            ConnectError::Reqwest(_) => (),
+            _ => panic!("Expected ConnectError::Reqwest"),
+        }
+    }
+
+    #[test]
+    fn test_serde_json_error_conversion() {
+        let err: serde_json::Error =
+            serde_json::from_str::<serde_json::Value>("invalid json").unwrap_err();
+        let connect_err: ConnectError = err.into();
+        match connect_err {
+            ConnectError::Json(_) => (),
+            _ => panic!("Expected ConnectError::Json"),
+        }
+    }
+}

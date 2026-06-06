@@ -176,8 +176,7 @@ impl Provider for OidcProvider {
         let mut user = if let Some(id_token) = token_res["id_token"].as_str() {
             // Cryptographic OIDC Signature Validation
             if let Ok(header) = jsonwebtoken::decode_header(id_token) {
-                let kid = header.kid.unwrap_or_default();
-                if let Some(jwk) = self.jwks.find(&kid) {
+                if let Some(jwk) = header.kid.as_ref().and_then(|kid| self.jwks.find(kid)) {
                     if let Ok(decoding_key) = jsonwebtoken::DecodingKey::from_jwk(jwk) {
                         let mut validation = jsonwebtoken::Validation::new(header.alg);
                         validation.set_audience(&[&self.client_id]);
@@ -189,14 +188,16 @@ impl Provider for OidcProvider {
                         {
                             let payload = token_data.claims;
                             ConnectUser {
-                                id: payload["sub"]
-                                    .as_str()
-                                    .map(String::from)
-                                    .unwrap_or_default(),
-                                name: payload["name"]
-                                    .as_str()
-                                    .map(String::from)
-                                    .unwrap_or_default(),
+                                id: payload["sub"].as_str().map(String::from).ok_or_else(|| {
+                                    ConnectError::Provider("Missing sub in id_token".to_string())
+                                })?,
+                                name: payload["name"].as_str().map(String::from).ok_or_else(
+                                    || {
+                                        ConnectError::Provider(
+                                            "Missing name in id_token".to_string(),
+                                        )
+                                    },
+                                )?,
                                 email: payload["email"].as_str().map(|s: &str| s.to_string()),
                                 avatar_url: payload["picture"]
                                     .as_str()
@@ -247,11 +248,11 @@ impl Provider for OidcProvider {
             id: user_res["sub"]
                 .as_str()
                 .map(String::from)
-                .unwrap_or_default(),
+                .ok_or_else(|| ConnectError::Provider("Missing sub in userinfo".to_string()))?,
             name: user_res["name"]
                 .as_str()
                 .map(String::from)
-                .unwrap_or_default(),
+                .ok_or_else(|| ConnectError::Provider("Missing name in userinfo".to_string()))?,
             email: user_res["email"].as_str().map(|s: &str| s.to_string()),
             avatar_url: user_res["picture"].as_str().map(|s: &str| s.to_string()),
             email_verified: user_res["email_verified"].as_bool(),
