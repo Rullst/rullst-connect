@@ -315,23 +315,139 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn test_request_builder_methods() {
+    #[test]
+    fn test_http_client_ext_methods() {
+        let captured = Arc::new(Mutex::new(None));
+        let client = TestClient {
+            captured_req: captured.clone(),
+        };
+        let client_ref: &dyn HttpClient = &client;
+
+        let get_builder = client_ref.get("https://example.com/get");
+        assert_eq!(get_builder.req.method, "GET");
+        assert_eq!(get_builder.req.url, "https://example.com/get");
+
+        let post_builder = client_ref.post("https://example.com/post");
+        assert_eq!(post_builder.req.method, "POST");
+        assert_eq!(post_builder.req.url, "https://example.com/post");
+    }
+
+    #[test]
+    fn test_request_builder_new() {
         let captured = Arc::new(Mutex::new(None));
         let client = TestClient {
             captured_req: captured.clone(),
         };
 
-        let builder = RequestBuilder::new(
-            &client,
-            "POST".to_string(),
-            "https://example.com/api".to_string(),
-        )
-        .header("X-Test", "Value")
-        .bearer_auth("my_token")
-        .basic_auth("username", Some("password"))
-        .json(&json!({"hello": "world"}))
-        .form(&[("param1", "val1"), ("param2", "val2")]);
+        let builder = RequestBuilder::new(&client, "PUT".to_string(), "https://test.com".to_string());
+        assert_eq!(builder.req.method, "PUT");
+        assert_eq!(builder.req.url, "https://test.com");
+        assert!(builder.req.headers.is_empty());
+        assert!(builder.req.form.is_empty());
+        assert!(builder.req.json.is_none());
+        assert!(builder.req.basic_auth.is_none());
+        assert!(builder.req.bearer_auth.is_none());
+    }
+
+    #[test]
+    fn test_request_builder_header() {
+        let captured = Arc::new(Mutex::new(None));
+        let client = TestClient {
+            captured_req: captured.clone(),
+        };
+        let client_ref: &dyn HttpClient = &client;
+
+        let builder = client_ref.get("http://a")
+            .header("X-A", "1")
+            .header("X-B", "2");
+        assert_eq!(
+            builder.req.headers,
+            vec![
+                ("X-A".to_string(), "1".to_string()),
+                ("X-B".to_string(), "2".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_request_builder_bearer_auth() {
+        let captured = Arc::new(Mutex::new(None));
+        let client = TestClient {
+            captured_req: captured.clone(),
+        };
+        let client_ref: &dyn HttpClient = &client;
+
+        let mut builder = client_ref.get("http://a").bearer_auth("token1");
+        assert_eq!(builder.req.bearer_auth, Some("token1".to_string()));
+
+        // Override
+        builder = builder.bearer_auth("token2");
+        assert_eq!(builder.req.bearer_auth, Some("token2".to_string()));
+    }
+
+    #[test]
+    fn test_request_builder_basic_auth() {
+        let captured = Arc::new(Mutex::new(None));
+        let client = TestClient {
+            captured_req: captured.clone(),
+        };
+        let client_ref: &dyn HttpClient = &client;
+
+        let builder1 = client_ref.get("http://a").basic_auth("user1", Some("pass1"));
+        assert_eq!(
+            builder1.req.basic_auth,
+            Some(("user1".to_string(), Some("pass1".to_string())))
+        );
+
+        let builder2 = client_ref.get("http://a").basic_auth("user2", None);
+        assert_eq!(builder2.req.basic_auth, Some(("user2".to_string(), None)));
+    }
+
+    #[test]
+    fn test_request_builder_json() {
+        let captured = Arc::new(Mutex::new(None));
+        let client = TestClient {
+            captured_req: captured.clone(),
+        };
+        let client_ref: &dyn HttpClient = &client;
+
+        let builder = client_ref.post("http://a").json(&json!({"key": "val"}));
+        assert_eq!(builder.req.json, Some(json!({"key": "val"})));
+    }
+
+    #[test]
+    fn test_request_builder_form() {
+        let captured = Arc::new(Mutex::new(None));
+        let client = TestClient {
+            captured_req: captured.clone(),
+        };
+        let client_ref: &dyn HttpClient = &client;
+
+        let builder = client_ref
+            .post("http://a")
+            .form(&[("a", "1")])
+            .form(&[("b", "2"), ("c", "3")]);
+
+        assert_eq!(
+            builder.req.form,
+            vec![
+                ("a".to_string(), "1".to_string()),
+                ("b".to_string(), "2".to_string()),
+                ("c".to_string(), "3".to_string()),
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn test_request_builder_send() {
+        let captured = Arc::new(Mutex::new(None));
+        let client = TestClient {
+            captured_req: captured.clone(),
+        };
+        let client_ref: &dyn HttpClient = &client;
+
+        let builder = client_ref.post("https://example.com/api")
+            .header("X-Test", "Value");
 
         let wrapper = builder.send().await.unwrap();
         let res_json: serde_json::Value = wrapper.json().await.unwrap();
@@ -343,19 +459,6 @@ mod tests {
         assert_eq!(
             req.headers,
             vec![("X-Test".to_string(), "Value".to_string())]
-        );
-        assert_eq!(req.bearer_auth, Some("my_token".to_string()));
-        assert_eq!(
-            req.basic_auth,
-            Some(("username".to_string(), Some("password".to_string())))
-        );
-        assert_eq!(req.json, Some(json!({"hello": "world"})));
-        assert_eq!(
-            req.form,
-            vec![
-                ("param1".to_string(), "val1".to_string()),
-                ("param2".to_string(), "val2".to_string())
-            ]
         );
     }
 
