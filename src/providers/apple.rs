@@ -180,22 +180,21 @@ impl Provider for AppleProvider {
     ) -> Result<ConnectUser, crate::error::ConnectError> {
         let mut payload: Option<Value> = None;
 
-        if let Ok(header) = jsonwebtoken::decode_header(id_token_str) {
-            let kid = header.kid.unwrap_or_default();
-            if let Ok(jwks) = self.get_jwks().await
-                && let Some(jwk) = jwks.find(&kid)
-                && let Ok(decoding_key) = jsonwebtoken::DecodingKey::from_jwk(jwk)
-            {
-                let mut validation = jsonwebtoken::Validation::new(header.alg);
-                validation.set_audience(&[&self.client_id]);
-                validation.set_issuer(&["https://appleid.apple.com"]);
-                validation.validate_exp = true;
+        if let Ok(header) = jsonwebtoken::decode_header(id_token_str)
+            && let Some(kid) = header.kid.as_ref()
+            && let Ok(jwks) = self.get_jwks().await
+            && let Some(jwk) = jwks.find(kid)
+            && let Ok(decoding_key) = jsonwebtoken::DecodingKey::from_jwk(jwk)
+        {
+            let mut validation = jsonwebtoken::Validation::new(header.alg);
+            validation.set_audience(&[&self.client_id]);
+            validation.set_issuer(&["https://appleid.apple.com"]);
+            validation.validate_exp = true;
 
-                if let Ok(token_data) =
-                    jsonwebtoken::decode::<Value>(id_token_str, &decoding_key, &validation)
-                {
-                    payload = Some(token_data.claims);
-                }
+            if let Ok(token_data) =
+                jsonwebtoken::decode::<Value>(id_token_str, &decoding_key, &validation)
+            {
+                payload = Some(token_data.claims);
             }
         }
 
@@ -209,10 +208,9 @@ impl Provider for AppleProvider {
         };
 
         Ok(ConnectUser {
-            id: payload["sub"]
-                .as_str()
-                .map(String::from)
-                .unwrap_or_default(),
+            id: payload["sub"].as_str().map(String::from).ok_or_else(|| {
+                crate::error::ConnectError::Provider("Missing sub in Apple id_token".to_string())
+            })?,
             name: String::with_capacity(256), // Developer needs to extract this from the form_post on first login
             email: payload["email"].as_str().map(|s: &str| s.to_string()),
             avatar_url: None, // Apple does not provide avatars

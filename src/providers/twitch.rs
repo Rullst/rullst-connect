@@ -79,10 +79,9 @@ impl Provider for TwitchProvider {
         let user_data = &user_data_array[0];
 
         Ok(ConnectUser {
-            id: user_data["id"]
-                .as_str()
-                .map(String::from)
-                .unwrap_or_default(),
+            id: user_data["id"].as_str().map(String::from).ok_or_else(|| {
+                crate::error::ConnectError::Provider("Missing user id".to_string())
+            })?,
             name: user_data["display_name"]
                 .as_str()
                 .map(String::from)

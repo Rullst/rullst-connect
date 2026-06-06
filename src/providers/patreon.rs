@@ -66,14 +66,15 @@ impl Provider for PatreonProvider {
         let attributes = &user_data["attributes"];
 
         Ok(ConnectUser {
-            id: user_data["id"]
-                .as_str()
-                .map(String::from)
-                .ok_or_else(|| ConnectError::Provider("Missing user id".to_string()))?,
+            id: user_data["id"].as_str().map(String::from).ok_or_else(|| {
+                crate::error::ConnectError::Provider("Missing user id".to_string())
+            })?,
             name: attributes["full_name"]
                 .as_str()
                 .map(String::from)
-                .ok_or_else(|| ConnectError::Provider("Missing full_name".to_string()))?,
+                .ok_or_else(|| {
+                    crate::error::ConnectError::Provider("Missing full_name".to_string())
+                })?,
             email: attributes["email"].as_str().map(|s: &str| s.to_string()),
             avatar_url: attributes["image_url"]
                 .as_str()

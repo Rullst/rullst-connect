@@ -67,10 +67,9 @@ impl Provider for ZoomProvider {
         let name = format!("{} {}", first_name, last_name).trim().to_string();
 
         Ok(ConnectUser {
-            id: user_res["id"]
-                .as_str()
-                .map(String::from)
-                .ok_or_else(|| ConnectError::Provider("Missing user id".to_string()))?,
+            id: user_res["id"].as_str().map(String::from).ok_or_else(|| {
+                crate::error::ConnectError::Provider("Missing user id".to_string())
+            })?,
             name,
             email: user_res["email"].as_str().map(|s: &str| s.to_string()),
             avatar_url: user_res["pic_url"].as_str().map(|s: &str| s.to_string()),

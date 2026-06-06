@@ -188,7 +188,7 @@ impl ReqwestClient {
             .unwrap_or_else(|_| reqwest::Client::new());
 
         let retry_policy = reqwest_retry::policies::ExponentialBackoff::builder()
-            .build_with_max_retries(max_retries);
+            .build_with_max_retries(max_retries.min(10));
         let client = reqwest_middleware::ClientBuilder::new(reqwest_client)
             .with(reqwest_retry::RetryTransientMiddleware::new_with_policy(
                 retry_policy,
@@ -216,7 +216,7 @@ impl HttpClient for ReqwestClient {
         };
 
         #[cfg(not(feature = "retry"))]
-        let res = {
+        let mut res = {
             let mut builder = self.client.request(method, &req.url);
 
             for (k, v) in &req.headers {
@@ -244,7 +244,7 @@ impl HttpClient for ReqwestClient {
         };
 
         #[cfg(feature = "retry")]
-        let res = {
+        let mut res = {
             let mut builder = self.client.request(method, &req.url);
 
             for (k, v) in &req.headers {
@@ -284,8 +284,27 @@ impl HttpClient for ReqwestClient {
         };
         let status = res.status().as_u16();
         tracing::debug!(status = %status, "Received HTTP response");
-        // Read body as text first in case it's not JSON
-        let text = res.text().await.map_err(crate::error::ConnectError::from)?;
+
+        // Read body chunk by chunk up to 2MB to prevent memory exhaustion / DoS
+        let mut body_bytes = Vec::new();
+        const MAX_BODY_SIZE: usize = 2 * 1024 * 1024; // 2MB limit
+
+        while let Some(chunk) = res
+            .chunk()
+            .await
+            .map_err(crate::error::ConnectError::from)?
+        {
+            if body_bytes.len() + chunk.len() > MAX_BODY_SIZE {
+                return Err(crate::error::ConnectError::Provider(
+                    "Response body size limit exceeded".to_string(),
+                ));
+            }
+            body_bytes.extend_from_slice(&chunk);
+        }
+
+        let text = String::from_utf8(body_bytes).map_err(|e| {
+            crate::error::ConnectError::Provider(format!("Response body is not valid UTF-8: {}", e))
+        })?;
         let body = serde_json::from_str(&text).unwrap_or(Value::String(text));
 
         Ok(HttpResponse { status, body })

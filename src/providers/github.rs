@@ -80,7 +80,10 @@ impl Provider for GithubProvider {
 
         // 3. Map to generic ConnectUser
         Ok(ConnectUser {
-            id: user_res["id"].as_i64().unwrap_or(0).to_string(),
+            id: user_res["id"]
+                .as_i64()
+                .ok_or_else(|| crate::error::ConnectError::Provider("Missing id".to_string()))?
+                .to_string(),
             name: user_res["name"]
                 .as_str()
                 .unwrap_or(user_res["login"].as_str().unwrap_or(""))

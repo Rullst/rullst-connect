@@ -16,9 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 - **Token Exposure Prevention**: Migrated VK (VKontakte), Facebook, and Instagram providers to use `Authorization: Bearer <token>` HTTP headers instead of exposing `access_token` in URL query parameters, preventing leakage in server logs and proxy caches.
 - **Client Secret Protection**: Migrated VK (VKontakte) token exchange from `GET` to `POST` request with a form body, protecting `client_secret` from URL exposure.
+- **OIDC Signature Validation Enforcement**: Removed silent fallback to `/userinfo` in Google and generic OIDC providers when `id_token` verification/signature fails, ensuring immediate failure for invalid tokens.
+- **Apple Key ID Hardening**: Refactored Apple id_token verification to prevent defaulting Key ID (`kid`) to an empty string, mitigating potential Key Confusion Attacks.
+- **DoS/OOM Prevention (HttpClient)**: Imposed a 2MB maximum size limit when reading HTTP response bodies chunk-by-chunk in the default client to protect against Slowloris-style buffer attacks. Clamped `max_retries` to a maximum of 10.
 
 ### Resilience & Error Handling
-- **Strict Error Handling**: Eliminated "silent failure" vectors across Microsoft, OIDC, Notion, Basecamp, Zoom, and Patreon providers. Crucial fields like `id` and `access_token` no longer use `.unwrap_or_default()` (which disguised missing API data as empty strings `""`). They now return an explicit `ConnectError::Provider` if the provider fails to deliver essential data.
+- **Strict Error Handling (Phantom Users Mitigation)**: Extended the elimination of silent failures across all remaining 21 providers (including GitHub, GitLab, Apple, Google, Facebook, etc.). Crucial user identifier fields (like `id` or `sub`) no longer default to empty strings `""` or `0`, returning an explicit `ConnectError::Provider` error if essential user data is missing.
 - **Graceful JWT Fallback**: Refactored `OidcProvider`'s `id_token` Key ID (`kid`) extraction to use `.and_then()` instead of `.unwrap_or_default()`, ensuring that missing `kid` headers cleanly fall back to the `/userinfo` endpoint instead of searching for an empty key.
 
 ### Added

@@ -60,32 +60,42 @@ impl OidcProvider {
         let authorization_endpoint = res["authorization_endpoint"]
             .as_str()
             .ok_or_else(|| {
-                ConnectError::Provider("Missing authorization_endpoint in OIDC config".to_string())
+                crate::error::ConnectError::Provider(
+                    "Missing authorization_endpoint in OIDC config".to_string(),
+                )
             })?
             .to_string();
 
         let token_endpoint = res["token_endpoint"]
             .as_str()
             .ok_or_else(|| {
-                ConnectError::Provider("Missing token_endpoint in OIDC config".to_string())
+                crate::error::ConnectError::Provider(
+                    "Missing token_endpoint in OIDC config".to_string(),
+                )
             })?
             .to_string();
 
         let userinfo_endpoint = res["userinfo_endpoint"]
             .as_str()
             .ok_or_else(|| {
-                ConnectError::Provider("Missing userinfo_endpoint in OIDC config".to_string())
+                crate::error::ConnectError::Provider(
+                    "Missing userinfo_endpoint in OIDC config".to_string(),
+                )
             })?
             .to_string();
 
         let jwks_uri = res["jwks_uri"]
             .as_str()
-            .ok_or_else(|| ConnectError::Provider("Missing jwks_uri in OIDC config".to_string()))?
+            .ok_or_else(|| {
+                crate::error::ConnectError::Provider("Missing jwks_uri in OIDC config".to_string())
+            })?
             .to_string();
 
         let issuer = res["issuer"]
             .as_str()
-            .ok_or_else(|| ConnectError::Provider("Missing issuer in OIDC config".to_string()))?
+            .ok_or_else(|| {
+                crate::error::ConnectError::Provider("Missing issuer in OIDC config".to_string())
+            })?
             .to_string();
 
         // Fetch the JWKS public keys immediately
@@ -175,49 +185,58 @@ impl Provider for OidcProvider {
 
         let mut user = if let Some(id_token) = token_res["id_token"].as_str() {
             // Cryptographic OIDC Signature Validation
-            if let Ok(header) = jsonwebtoken::decode_header(id_token) {
-                if let Some(jwk) = header.kid.as_ref().and_then(|kid| self.jwks.find(kid)) {
-                    if let Ok(decoding_key) = jsonwebtoken::DecodingKey::from_jwk(jwk) {
-                        let mut validation = jsonwebtoken::Validation::new(header.alg);
-                        validation.set_audience(&[&self.client_id]);
-                        validation.set_issuer(&[&self.issuer]);
-                        validation.validate_exp = true;
+            let header = jsonwebtoken::decode_header(id_token).map_err(|e| {
+                crate::error::ConnectError::Provider(format!(
+                    "Failed to decode OIDC id_token header: {}",
+                    e
+                ))
+            })?;
 
-                        if let Ok(token_data) =
-                            jsonwebtoken::decode::<Value>(id_token, &decoding_key, &validation)
-                        {
-                            let payload = token_data.claims;
-                            ConnectUser {
-                                id: payload["sub"].as_str().map(String::from).ok_or_else(|| {
-                                    ConnectError::Provider("Missing sub in id_token".to_string())
-                                })?,
-                                name: payload["name"].as_str().map(String::from).ok_or_else(
-                                    || {
-                                        ConnectError::Provider(
-                                            "Missing name in id_token".to_string(),
-                                        )
-                                    },
-                                )?,
-                                email: payload["email"].as_str().map(|s: &str| s.to_string()),
-                                avatar_url: payload["picture"]
-                                    .as_str()
-                                    .map(|s: &str| s.to_string()),
-                                email_verified: payload["email_verified"].as_bool(),
-                                raw_data: payload,
-                                access_token: access_token.to_string(),
-                                refresh_token: None,
-                                expires_in: None,
-                            }
-                        } else {
-                            self.get_user_from_token(access_token).await?
-                        }
-                    } else {
-                        self.get_user_from_token(access_token).await?
-                    }
-                } else {
-                    self.get_user_from_token(access_token).await?
+            if let Some(kid) = header.kid.as_ref() {
+                let jwk = self.jwks.find(kid).ok_or_else(|| {
+                    crate::error::ConnectError::Provider(format!(
+                        "OIDC JWK with key ID '{}' not found",
+                        kid
+                    ))
+                })?;
+                let decoding_key = jsonwebtoken::DecodingKey::from_jwk(jwk).map_err(|e| {
+                    crate::error::ConnectError::Provider(format!(
+                        "Failed to build OIDC decoding key from JWK: {}",
+                        e
+                    ))
+                })?;
+                let mut validation = jsonwebtoken::Validation::new(header.alg);
+                validation.set_audience(&[&self.client_id]);
+                validation.set_issuer(&[&self.issuer]);
+                validation.validate_exp = true;
+
+                let token_data =
+                    jsonwebtoken::decode::<Value>(id_token, &decoding_key, &validation).map_err(
+                        |e| {
+                            crate::error::ConnectError::Provider(format!(
+                                "OIDC id_token signature or claims validation failed: {}",
+                                e
+                            ))
+                        },
+                    )?;
+                let payload = token_data.claims;
+                ConnectUser {
+                    id: payload["sub"].as_str().map(String::from).ok_or_else(|| {
+                        crate::error::ConnectError::Provider("Missing sub in id_token".to_string())
+                    })?,
+                    name: payload["name"].as_str().map(String::from).ok_or_else(|| {
+                        crate::error::ConnectError::Provider("Missing name in id_token".to_string())
+                    })?,
+                    email: payload["email"].as_str().map(|s: &str| s.to_string()),
+                    avatar_url: payload["picture"].as_str().map(|s: &str| s.to_string()),
+                    email_verified: payload["email_verified"].as_bool(),
+                    raw_data: payload,
+                    access_token: access_token.to_string(),
+                    refresh_token: None,
+                    expires_in: None,
                 }
             } else {
+                // If kid is missing from header, cleanly skip signature validation and fallback to secure /userinfo
                 self.get_user_from_token(access_token).await?
             }
         } else {
@@ -245,14 +264,12 @@ impl Provider for OidcProvider {
             .await?;
 
         Ok(ConnectUser {
-            id: user_res["sub"]
-                .as_str()
-                .map(String::from)
-                .ok_or_else(|| ConnectError::Provider("Missing sub in userinfo".to_string()))?,
-            name: user_res["name"]
-                .as_str()
-                .map(String::from)
-                .ok_or_else(|| ConnectError::Provider("Missing name in userinfo".to_string()))?,
+            id: user_res["sub"].as_str().map(String::from).ok_or_else(|| {
+                crate::error::ConnectError::Provider("Missing sub in userinfo".to_string())
+            })?,
+            name: user_res["name"].as_str().map(String::from).ok_or_else(|| {
+                crate::error::ConnectError::Provider("Missing name in userinfo".to_string())
+            })?,
             email: user_res["email"].as_str().map(|s: &str| s.to_string()),
             avatar_url: user_res["picture"].as_str().map(|s: &str| s.to_string()),
             email_verified: user_res["email_verified"].as_bool(),

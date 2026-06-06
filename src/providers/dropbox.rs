@@ -70,7 +70,9 @@ impl Provider for DropboxProvider {
             id: user_res["account_id"]
                 .as_str()
                 .map(String::from)
-                .unwrap_or_default(),
+                .ok_or_else(|| {
+                    crate::error::ConnectError::Provider("Missing user id".to_string())
+                })?,
             name: user_res["name"]["display_name"]
                 .as_str()
                 .unwrap_or("")
