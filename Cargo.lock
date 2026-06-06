@@ -2532,7 +2532,7 @@ dependencies = [
 
 [[package]]
 name = "rullst-connect"
-version = "7.0.0"
+version = "7.0.1"
 dependencies = [
  "actix-web",
  "async-trait",
