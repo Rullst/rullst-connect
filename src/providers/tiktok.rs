@@ -67,7 +67,7 @@ impl Provider for TiktokProvider {
             id: data["open_id"]
                 .as_str()
                 .map(String::from)
-                .unwrap_or_default(),
+                .ok_or_else(|| crate::error::ConnectError::Provider("Missing user id".to_string()))?,
             name: data["display_name"]
                 .as_str()
                 .map(String::from)

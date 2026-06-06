@@ -82,7 +82,7 @@ impl Provider for StripeProvider {
             id: user_res["id"]
                 .as_str()
                 .map(String::from)
-                .unwrap_or_default(),
+                .ok_or_else(|| crate::error::ConnectError::Provider("Missing user id".to_string()))?,
             name: name.to_string(),
             email: user_res["email"].as_str().map(|s: &str| s.to_string()),
             avatar_url: None, // Stripe does not expose an avatar URL via this endpoint

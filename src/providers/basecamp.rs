@@ -74,7 +74,7 @@ impl Provider for BasecampProvider {
             id: identity["id"]
                 .as_i64()
                 .map(|i| i.to_string())
-                .ok_or_else(|| ConnectError::Provider("Missing user id".to_string()))?,
+                .ok_or_else(|| crate::error::ConnectError::Provider("Missing user id".to_string()))?,
             name,
             email: identity["email_address"]
                 .as_str()

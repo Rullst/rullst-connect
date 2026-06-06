@@ -72,7 +72,7 @@ impl Provider for DigitaloceanProvider {
             id: account["uuid"]
                 .as_str()
                 .map(String::from)
-                .unwrap_or_default(),
+                .ok_or_else(|| crate::error::ConnectError::Provider("Missing user id".to_string()))?,
             name: String::with_capacity(256), // DigitalOcean does not provide a display name via API
             email: account["email"].as_str().map(|s: &str| s.to_string()),
             avatar_url: None, // No avatar provided

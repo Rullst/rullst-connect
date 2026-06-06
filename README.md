@@ -10,7 +10,7 @@
 [![Audit: 10/10](https://img.shields.io/badge/Audit-10%2F10-success.svg)](AUDIT.md)
 [![Zero Panics](https://img.shields.io/badge/Panics-0-success.svg)](AUDIT.md)
 
-**Rullst Connect** is an elegant, async-first, and Developer Experience (DX) focused OAuth2 authentication library for Rust, heavily inspired by Laravel Socialite. It simplifies the integration of social logins into your Rust web applications, providing a standardized interface across multiple providers.
+**Rullst Connect** is an elegant, async-first, and Developer Experience (DX) focused OAuth2 authentication library for Rust. It simplifies the integration of social logins into your Rust web applications, providing a standardized interface across multiple providers.
 
 ## ✨ Features
 

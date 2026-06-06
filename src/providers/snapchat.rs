@@ -74,7 +74,7 @@ impl Provider for SnapchatProvider {
             id: me["externalId"]
                 .as_str()
                 .map(String::from)
-                .unwrap_or_default(),
+                .ok_or_else(|| crate::error::ConnectError::Provider("Missing user id".to_string()))?,
             name: me["displayName"]
                 .as_str()
                 .map(String::from)

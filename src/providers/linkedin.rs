@@ -72,7 +72,7 @@ impl Provider for LinkedinProvider {
             id: user_res["sub"]
                 .as_str()
                 .map(String::from)
-                .unwrap_or_default(),
+                .ok_or_else(|| crate::error::ConnectError::Provider("Missing user id".to_string()))?,
             name: user_res["name"]
                 .as_str()
                 .map(String::from)

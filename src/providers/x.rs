@@ -23,7 +23,7 @@ impl Provider for XProvider {
 
     async fn get_user(&self, _auth_code: &str) -> Result<ConnectUser, ConnectError> {
         let _ = &self.client_secret;
-        Err(ConnectError::Provider(
+        Err(crate::error::ConnectError::Provider(
             "X (Twitter) requires PKCE. Use get_user_with_pkce instead.".to_string(),
         ))
     }
@@ -77,7 +77,7 @@ impl Provider for XProvider {
         let data = &user_res["data"];
 
         Ok(ConnectUser {
-            id: data["id"].as_str().map(String::from).unwrap_or_default(),
+            id: data["id"].as_str().map(String::from).ok_or_else(|| crate::error::ConnectError::Provider("Missing id".to_string()))?,
             name: data["name"].as_str().map(String::from).unwrap_or_default(),
             email: None, // X v2 does not return email via this endpoint by default
             avatar_url: data["profile_image_url"]
