@@ -445,5 +445,48 @@ mod tests {
             }
             _ => panic!("Expected ProviderApiError"),
         }
+
+        // Test case 6: >= 400 with 'error' field present but not a string
+        let nested_error_wrapper = ResponseWrapper {
+            res: HttpResponse {
+                status: 400,
+                body: json!({
+                    "error": {
+                        "details": "nested error object"
+                    }
+                }),
+            },
+        };
+        let nested_error_res = nested_error_wrapper.error_for_status();
+        assert!(nested_error_res.is_err());
+        match nested_error_res.unwrap_err() {
+            crate::error::ConnectError::ProviderApiError { code, message } => {
+                // Should fall back to "HTTP_400" because `error` is not a string
+                assert_eq!(code, "HTTP_400");
+                // Message should be the whole JSON body since it didn't find error_description or message
+                assert_eq!(message, r#"{"error":{"details":"nested error object"}}"#);
+            }
+            _ => panic!("Expected ProviderApiError"),
+        }
+
+        // Test case 7: >= 400 with 'error' field present as a string but no 'error_description' or 'message'
+        let only_error_string_wrapper = ResponseWrapper {
+            res: HttpResponse {
+                status: 400,
+                body: json!({
+                    "error": "invalid_grant"
+                }),
+            },
+        };
+        let only_error_string_res = only_error_string_wrapper.error_for_status();
+        assert!(only_error_string_res.is_err());
+        match only_error_string_res.unwrap_err() {
+            crate::error::ConnectError::ProviderApiError { code, message } => {
+                assert_eq!(code, "invalid_grant");
+                // Message should be the whole JSON body since no description or message fields were present
+                assert_eq!(message, r#"{"error":"invalid_grant"}"#);
+            }
+            _ => panic!("Expected ProviderApiError"),
+        }
     }
 }
