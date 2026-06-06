@@ -134,8 +134,8 @@ mod tests {
         let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
             .await
             .expect("Failed to read response body bytes");
-        let json: serde_json::Value = serde_json::from_slice(&body_bytes)
-            .expect("Failed to parse response body as JSON");
+        let json: serde_json::Value =
+            serde_json::from_slice(&body_bytes).expect("Failed to parse response body as JSON");
 
         assert_eq!(json["error"], "invalid_grant");
     }

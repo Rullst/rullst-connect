@@ -335,10 +335,15 @@ mod tests {
         .form(&[("param1", "val1"), ("param2", "val2")]);
 
         let wrapper = builder.send().await.expect("Failed to send request");
-        let res_json: serde_json::Value = wrapper.json().await.expect("Failed to parse JSON response");
+        let res_json: serde_json::Value =
+            wrapper.json().await.expect("Failed to parse JSON response");
         assert_eq!(res_json["status"], "ok");
 
-        let req = captured.lock().await.take().expect("Request should be captured");
+        let req = captured
+            .lock()
+            .await
+            .take()
+            .expect("Request should be captured");
         assert_eq!(req.method, "POST");
         assert_eq!(req.url, "https://example.com/api");
         assert_eq!(
