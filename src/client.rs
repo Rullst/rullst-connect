@@ -296,10 +296,10 @@ impl HttpClient for ReqwestClient {
 mod tests {
     use super::*;
     use serde_json::json;
-    use std::sync::{Arc, Mutex};
+    use std::sync::Arc;
 
     struct TestClient {
-        captured_req: Arc<Mutex<Option<HttpRequest>>>,
+        captured_req: Arc<tokio::sync::Mutex<Option<HttpRequest>>>,
     }
 
     #[async_trait]
@@ -308,7 +308,7 @@ mod tests {
             &self,
             req: HttpRequest,
         ) -> Result<HttpResponse, crate::error::ConnectError> {
-            *self.captured_req.lock().unwrap() = Some(req);
+            *self.captured_req.lock().await = Some(req);
             Ok(HttpResponse {
                 status: 200,
                 body: json!({"status": "ok"}),
@@ -318,7 +318,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_request_builder_methods() {
-        let captured = Arc::new(Mutex::new(None));
+        let captured = Arc::new(tokio::sync::Mutex::new(None));
         let client = TestClient {
             captured_req: captured.clone(),
         };
@@ -334,11 +334,11 @@ mod tests {
         .json(&json!({"hello": "world"}))
         .form(&[("param1", "val1"), ("param2", "val2")]);
 
-        let wrapper = builder.send().await.unwrap();
-        let res_json: serde_json::Value = wrapper.json().await.unwrap();
+        let wrapper = builder.send().await.expect("Failed to send request");
+        let res_json: serde_json::Value = wrapper.json().await.expect("Failed to parse JSON response");
         assert_eq!(res_json["status"], "ok");
 
-        let req = captured.lock().unwrap().take().unwrap();
+        let req = captured.lock().await.take().expect("Request should be captured");
         assert_eq!(req.method, "POST");
         assert_eq!(req.url, "https://example.com/api");
         assert_eq!(
@@ -384,7 +384,7 @@ mod tests {
         };
         let oauth_error_res = oauth_error_wrapper.error_for_status();
         assert!(oauth_error_res.is_err());
-        match oauth_error_res.unwrap_err() {
+        match oauth_error_res.expect_err("Expected error status") {
             crate::error::ConnectError::ProviderApiError { code, message } => {
                 assert_eq!(code, "invalid_request");
                 assert_eq!(message, "The request is missing a required parameter");
@@ -403,7 +403,7 @@ mod tests {
         };
         let msg_error_res = msg_error_wrapper.error_for_status();
         assert!(msg_error_res.is_err());
-        match msg_error_res.unwrap_err() {
+        match msg_error_res.expect_err("Expected error status") {
             crate::error::ConnectError::ProviderApiError { code, message } => {
                 assert_eq!(code, "HTTP_401");
                 assert_eq!(message, "Unauthorized access to resource");
@@ -422,7 +422,7 @@ mod tests {
         };
         let unknown_json_res = unknown_json_wrapper.error_for_status();
         assert!(unknown_json_res.is_err());
-        match unknown_json_res.unwrap_err() {
+        match unknown_json_res.expect_err("Expected error status") {
             crate::error::ConnectError::ProviderApiError { code, message } => {
                 assert_eq!(code, "HTTP_500");
                 assert_eq!(message, r#"{"internal_code":999}"#);
@@ -439,7 +439,7 @@ mod tests {
         };
         let raw_text_res = raw_text_wrapper.error_for_status();
         assert!(raw_text_res.is_err());
-        match raw_text_res.unwrap_err() {
+        match raw_text_res.expect_err("Expected error status") {
             crate::error::ConnectError::ProviderApiError { code, message } => {
                 assert_eq!(code, "HTTP_403");
                 assert_eq!(message, "Forbidden plain text explanation");

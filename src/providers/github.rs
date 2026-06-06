@@ -70,7 +70,7 @@ impl Provider for GithubProvider {
         let user_res = self
             .http_client
             .get("https://api.github.com/user")
-            .header("Authorization", format!("Bearer {}", access_token))
+            .bearer_auth(access_token)
             .header("User-Agent", "rullst-connect") // GitHub API requires User-Agent
             .send()
             .await?

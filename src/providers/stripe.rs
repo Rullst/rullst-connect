@@ -66,7 +66,7 @@ impl Provider for StripeProvider {
         let user_res = self
             .http_client
             .get("https://api.stripe.com/v1/account")
-            .header("Authorization", format!("Bearer {}", access_token))
+            .bearer_auth(access_token)
             .send()
             .await?
             .error_for_status()?

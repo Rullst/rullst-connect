@@ -57,7 +57,7 @@ impl Provider for PatreonProvider {
 
     async fn get_user_from_token(&self, access_token: &str) -> Result<ConnectUser, ConnectError> {
         let user_res = self.http_client.get("https://www.patreon.com/api/oauth2/v2/identity?fields[user]=email,full_name,image_url")
-            .header("Authorization", format!("Bearer {}", access_token))
+            .bearer_auth(access_token)
             .send().await?.error_for_status()?
             .json::<Value>()
             .await?;

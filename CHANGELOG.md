@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [7.0.1] - 2026-06-06
 
+### Security & Performance
+- **Header Optimization**: Migrated 30+ providers from manual `format!()` string concatenation and Base64 encoding to native `.bearer_auth()` and `.basic_auth()` methods for robust `Authorization` header construction.
+- **Async Test Hardening**: Replaced `std::sync::Mutex` with `tokio::sync::Mutex` in test mocks to prevent async lock contention. Replaced unsafe `.unwrap()` with descriptive `.expect()` and idiomatic error handling in tests and docs.
+
 ### Security
 - **Token Exposure Prevention**: Migrated VK (VKontakte), Facebook, and Instagram providers to use `Authorization: Bearer <token>` HTTP headers instead of exposing `access_token` in URL query parameters, preventing leakage in server logs and proxy caches.
 - **Client Secret Protection**: Migrated VK (VKontakte) token exchange from `GET` to `POST` request with a form body, protecting `client_secret` from URL exposure.

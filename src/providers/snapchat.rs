@@ -60,7 +60,7 @@ impl Provider for SnapchatProvider {
         let user_res = self
             .http_client
             .post("https://kit.snapchat.com/v1/me")
-            .header("Authorization", format!("Bearer {}", access_token))
+            .bearer_auth(access_token)
             .json(&serde_json::json!({ "query": query }))
             .send()
             .await?

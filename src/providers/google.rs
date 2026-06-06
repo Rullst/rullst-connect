@@ -199,7 +199,7 @@ impl Provider for GoogleProvider {
         let user_res = self
             .http_client
             .get("https://www.googleapis.com/oauth2/v3/userinfo")
-            .header("Authorization", format!("Bearer {}", access_token))
+            .bearer_auth(access_token)
             .send()
             .await?
             .error_for_status()?

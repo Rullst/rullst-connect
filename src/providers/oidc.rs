@@ -237,7 +237,7 @@ impl Provider for OidcProvider {
         let user_res = self
             .http_client
             .get(&self.userinfo_endpoint)
-            .header("Authorization", format!("Bearer {}", access_token))
+            .bearer_auth(access_token)
             .send()
             .await?
             .error_for_status()?
@@ -272,12 +272,12 @@ impl Provider for OidcProvider {
 mod tests {
     use super::*;
     use serde_json::json;
-    use std::sync::{Arc, Mutex};
+    use std::sync::Arc;
 
     struct MockOidcClient {
         config_body: Value,
         jwks_body: Value,
-        captured_urls: Mutex<Vec<String>>,
+        captured_urls: tokio::sync::Mutex<Vec<String>>,
     }
 
     #[async_trait]
@@ -286,7 +286,7 @@ mod tests {
             &self,
             req: crate::client::HttpRequest,
         ) -> Result<crate::client::HttpResponse, crate::error::ConnectError> {
-            self.captured_urls.lock().unwrap().push(req.url.clone());
+            self.captured_urls.lock().await.push(req.url.clone());
             if req.url.contains("openid-configuration") {
                 Ok(crate::client::HttpResponse {
                     status: 200,
@@ -318,7 +318,7 @@ mod tests {
             jwks_body: json!({
                 "keys": []
             }),
-            captured_urls: Mutex::new(vec![]),
+            captured_urls: tokio::sync::Mutex::new(vec![]),
         });
 
         // Test with trailing slash
@@ -330,9 +330,9 @@ mod tests {
             mock_client.clone(),
         )
         .await
-        .unwrap();
+        .expect("OIDC discovery failed");
 
-        let urls = mock_client.captured_urls.lock().unwrap();
+        let urls = mock_client.captured_urls.lock().await;
         assert_eq!(
             urls[0],
             "https://issuer.com/.well-known/openid-configuration"
@@ -353,7 +353,7 @@ mod tests {
             jwks_body: json!({
                 "keys": []
             }),
-            captured_urls: Mutex::new(vec![]),
+            captured_urls: tokio::sync::Mutex::new(vec![]),
         });
 
         // Test without trailing slash
@@ -365,9 +365,9 @@ mod tests {
             mock_client.clone(),
         )
         .await
-        .unwrap();
+        .expect("OIDC discovery failed");
 
-        let urls = mock_client.captured_urls.lock().unwrap();
+        let urls = mock_client.captured_urls.lock().await;
         assert_eq!(
             urls[0],
             "https://issuer.com/.well-known/openid-configuration"
@@ -387,7 +387,7 @@ mod tests {
             jwks_body: json!({
                 "keys": []
             }),
-            captured_urls: Mutex::new(vec![]),
+            captured_urls: tokio::sync::Mutex::new(vec![]),
         });
 
         let res = OidcProvider::discover_with_client(

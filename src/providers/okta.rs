@@ -119,7 +119,7 @@ impl Provider for OktaProvider {
         let user_res = self
             .http_client
             .get(format!("https://{}/oauth2/v1/userinfo", self.domain))
-            .header("Authorization", format!("Bearer {}", access_token))
+            .bearer_auth(access_token)
             .send()
             .await?
             .error_for_status()?

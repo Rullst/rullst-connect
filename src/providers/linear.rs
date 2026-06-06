@@ -58,7 +58,7 @@ impl Provider for LinearProvider {
         let user_res = self
             .http_client
             .post("https://api.linear.app/graphql")
-            .header("Authorization", format!("Bearer {}", access_token))
+            .bearer_auth(access_token)
             .json(&serde_json::json!({ "query": query }))
             .send()
             .await?

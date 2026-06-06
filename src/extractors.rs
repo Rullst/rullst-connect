@@ -12,7 +12,9 @@ use serde::Deserialize;
 ///         return format!("Auth failed: {}", error);
 ///     }
 ///     
-///     let code = params.code.unwrap();
+///     let Some(code) = params.code else {
+///         return "Authorization code missing".into_response();
+///     };
 ///     // Handle token exchange...
 /// }
 /// ```
@@ -131,7 +133,8 @@ mod tests {
     #[test]
     fn test_auth_callback_success_deserialization() {
         let query = "code=auth_code_123&state=state_xyz";
-        let callback: AuthCallback = serde_urlencoded::from_str(query).unwrap();
+        let callback: AuthCallback = serde_urlencoded::from_str(query)
+            .expect("Failed to deserialize valid query string");
 
         assert_eq!(callback.code.as_deref(), Some("auth_code_123"));
         assert_eq!(callback.state.as_deref(), Some("state_xyz"));
@@ -142,7 +145,8 @@ mod tests {
     #[test]
     fn test_auth_callback_error_deserialization() {
         let query = "error=access_denied&error_description=User%20denied%20access&state=state_xyz";
-        let callback: AuthCallback = serde_urlencoded::from_str(query).unwrap();
+        let callback: AuthCallback = serde_urlencoded::from_str(query)
+            .expect("Failed to deserialize error query string");
 
         assert_eq!(callback.code, None);
         assert_eq!(callback.state.as_deref(), Some("state_xyz"));
@@ -156,7 +160,8 @@ mod tests {
     #[test]
     fn test_auth_callback_empty_deserialization() {
         let query = "";
-        let callback: AuthCallback = serde_urlencoded::from_str(query).unwrap();
+        let callback: AuthCallback = serde_urlencoded::from_str(query)
+            .expect("Failed to deserialize empty query string");
 
         assert_eq!(callback.code, None);
         assert_eq!(callback.state, None);
