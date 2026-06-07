@@ -208,12 +208,9 @@ impl Provider for AppleProvider {
         };
 
         Ok(ConnectUser {
-            id: payload["sub"]
-                .as_str()
-                .map(String::from)
-                .ok_or_else(|| {
-                    crate::error::ConnectError::Provider("Missing sub in Apple id_token".to_string())
-                })?,
+            id: payload["sub"].as_str().map(String::from).ok_or_else(|| {
+                crate::error::ConnectError::Provider("Missing sub in Apple id_token".to_string())
+            })?,
             name: String::with_capacity(256), // Developer needs to extract this from the form_post on first login
             email: payload["email"].as_str().map(|s: &str| s.to_string()),
             avatar_url: None, // Apple does not provide avatars
