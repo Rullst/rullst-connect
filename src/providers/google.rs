@@ -137,26 +137,16 @@ impl Provider for GoogleProvider {
 
         let mut user = if let Some(id_token) = token_res["id_token"].as_str() {
             // Secure OIDC: Verify the signature of Google's id_token
-            let header = jsonwebtoken::decode_header(id_token).map_err(|e| {
-                crate::error::ConnectError::Provider(format!(
-                    "Failed to decode Google id_token header: {}",
-                    e
-                ))
-            })?;
+            let header = jsonwebtoken::decode_header(id_token)
+                .map_err(|e| crate::error::ConnectError::Provider(format!("Failed to decode Google id_token header: {}", e)))?;
 
             if let Some(kid) = header.kid.as_ref() {
                 let jwks = self.get_jwks().await?;
                 let jwk = jwks.find(kid).ok_or_else(|| {
-                    crate::error::ConnectError::Provider(format!(
-                        "Google JWK with key ID '{}' not found",
-                        kid
-                    ))
+                    crate::error::ConnectError::Provider(format!("Google JWK with key ID '{}' not found", kid))
                 })?;
                 let decoding_key = jsonwebtoken::DecodingKey::from_jwk(jwk).map_err(|e| {
-                    crate::error::ConnectError::Provider(format!(
-                        "Failed to build Google decoding key: {}",
-                        e
-                    ))
+                    crate::error::ConnectError::Provider(format!("Failed to build Google decoding key: {}", e))
                 })?;
 
                 let mut validation = jsonwebtoken::Validation::new(header.alg);
@@ -164,24 +154,23 @@ impl Provider for GoogleProvider {
                 validation.set_issuer(&["https://accounts.google.com", "accounts.google.com"]);
                 validation.validate_exp = true;
 
-                let token_data =
-                    jsonwebtoken::decode::<Value>(id_token, &decoding_key, &validation).map_err(
-                        |e| {
-                            crate::error::ConnectError::Provider(format!(
-                                "Google id_token validation failed: {}",
-                                e
-                            ))
-                        },
-                    )?;
+                let token_data = jsonwebtoken::decode::<Value>(id_token, &decoding_key, &validation)
+                    .map_err(|e| {
+                        crate::error::ConnectError::Provider(format!("Google id_token validation failed: {}", e))
+                    })?;
 
                 let p = token_data.claims;
                 ConnectUser {
-                    id: p["sub"].as_str().map(String::from).ok_or_else(|| {
-                        crate::error::ConnectError::Provider(
-                            "Missing sub claim in Google id_token".to_string(),
-                        )
-                    })?,
-                    name: p["name"].as_str().map(String::from).unwrap_or_default(),
+                    id: p["sub"]
+                        .as_str()
+                        .map(String::from)
+                        .ok_or_else(|| {
+                            crate::error::ConnectError::Provider("Missing sub claim in Google id_token".to_string())
+                        })?,
+                    name: p["name"]
+                        .as_str()
+                        .map(String::from)
+                        .unwrap_or_default(),
                     email: p["email"].as_str().map(|s: &str| s.to_string()),
                     avatar_url: p["picture"]
                         .as_str()
@@ -225,9 +214,12 @@ impl Provider for GoogleProvider {
             .await?;
 
         Ok(ConnectUser {
-            id: user_res["sub"].as_str().map(String::from).ok_or_else(|| {
-                crate::error::ConnectError::Provider("Missing sub in userinfo".to_string())
-            })?,
+            id: user_res["sub"]
+                .as_str()
+                .map(String::from)
+                .ok_or_else(|| {
+                    crate::error::ConnectError::Provider("Missing sub in userinfo".to_string())
+                })?,
             name: user_res["name"]
                 .as_str()
                 .map(String::from)

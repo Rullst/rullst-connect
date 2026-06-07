@@ -46,17 +46,17 @@ impl Provider for NotionProvider {
         let access_token = token_res["access_token"]
             .as_str()
             .map(String::from)
-            .ok_or_else(|| {
-                crate::error::ConnectError::Provider("Missing access_token".to_string())
-            })?;
+            .ok_or_else(|| crate::error::ConnectError::Provider("Missing access_token".to_string()))?;
 
         Ok(ConnectUser {
-            id: owner["id"].as_str().map(String::from).ok_or_else(|| {
-                crate::error::ConnectError::Provider("Missing user id".to_string())
-            })?,
-            name: owner["name"].as_str().map(String::from).ok_or_else(|| {
-                crate::error::ConnectError::Provider("Missing user name".to_string())
-            })?,
+            id: owner["id"]
+                .as_str()
+                .map(String::from)
+                .ok_or_else(|| crate::error::ConnectError::Provider("Missing user id".to_string()))?,
+            name: owner["name"]
+                .as_str()
+                .map(String::from)
+                .ok_or_else(|| crate::error::ConnectError::Provider("Missing user name".to_string()))?,
             email: owner["person"]["email"]
                 .as_str()
                 .map(|s: &str| s.to_string()),
@@ -91,12 +91,14 @@ impl Provider for NotionProvider {
         };
 
         Ok(ConnectUser {
-            id: user["id"].as_str().map(String::from).ok_or_else(|| {
-                crate::error::ConnectError::Provider("Missing user id".to_string())
-            })?,
-            name: user["name"].as_str().map(String::from).ok_or_else(|| {
-                crate::error::ConnectError::Provider("Missing user name".to_string())
-            })?,
+            id: user["id"]
+                .as_str()
+                .map(String::from)
+                .ok_or_else(|| crate::error::ConnectError::Provider("Missing user id".to_string()))?,
+            name: user["name"]
+                .as_str()
+                .map(String::from)
+                .ok_or_else(|| crate::error::ConnectError::Provider("Missing user name".to_string()))?,
             email: user["person"]["email"]
                 .as_str()
                 .map(|s: &str| s.to_string()),

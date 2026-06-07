@@ -64,9 +64,10 @@ impl Provider for TiktokProvider {
         let data = &user_res["data"];
 
         Ok(ConnectUser {
-            id: data["open_id"].as_str().map(String::from).ok_or_else(|| {
-                crate::error::ConnectError::Provider("Missing user id".to_string())
-            })?,
+            id: data["open_id"]
+                .as_str()
+                .map(String::from)
+                .ok_or_else(|| crate::error::ConnectError::Provider("Missing user id".to_string()))?,
             name: data["display_name"]
                 .as_str()
                 .map(String::from)

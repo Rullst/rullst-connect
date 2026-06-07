@@ -69,10 +69,7 @@ impl Provider for LinearProvider {
         let viewer = &user_res["data"]["viewer"];
 
         Ok(ConnectUser {
-            id: viewer["id"]
-                .as_str()
-                .map(String::from)
-                .ok_or_else(|| crate::error::ConnectError::Provider("Missing id".to_string()))?,
+            id: viewer["id"].as_str().map(String::from).ok_or_else(|| crate::error::ConnectError::Provider("Missing id".to_string()))?,
             name: viewer["name"]
                 .as_str()
                 .map(String::from)

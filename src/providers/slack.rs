@@ -70,9 +70,10 @@ impl Provider for SlackProvider {
         let user_data = &user_res["user"];
 
         Ok(ConnectUser {
-            id: user_data["id"].as_str().map(String::from).ok_or_else(|| {
-                crate::error::ConnectError::Provider("Missing user id".to_string())
-            })?,
+            id: user_data["id"]
+                .as_str()
+                .map(String::from)
+                .ok_or_else(|| crate::error::ConnectError::Provider("Missing user id".to_string()))?,
             name: user_data["name"]
                 .as_str()
                 .map(String::from)

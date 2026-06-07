@@ -81,9 +81,7 @@ impl Provider for VkProvider {
             id: user_data["id"]
                 .as_i64()
                 .map(|i| i.to_string())
-                .ok_or_else(|| {
-                    crate::error::ConnectError::Provider("Missing user id".to_string())
-                })?,
+                .ok_or_else(|| crate::error::ConnectError::Provider("Missing user id".to_string()))?,
             name,
             email: None, // Email is generally not available in users.get unless specified and granted
             avatar_url: user_data["photo_200"].as_str().map(|s: &str| s.to_string()),
