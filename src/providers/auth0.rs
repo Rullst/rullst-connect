@@ -1,15 +1,19 @@
 use crate::error::ConnectError;
 use crate::provider::Provider;
 use crate::user::ConnectUser;
+use crate::client::HttpClientExt;
 use async_trait::async_trait;
 use serde_json::Value;
+
+static DEFAULT_CLIENT: ::std::sync::LazyLock<::std::sync::Arc<dyn crate::client::HttpClient>> =
+    ::std::sync::LazyLock::new(|| ::std::sync::Arc::new(crate::client::ReqwestClient::new()));
 
 pub struct Auth0Provider {
     client_id: String,
     client_secret: String,
     redirect_url: String,
     domain: String,
-    http_client: reqwest::Client,
+    http_client: ::std::sync::Arc<dyn crate::client::HttpClient>,
     scopes: Vec<String>,
     state: Option<String>,
     pkce_challenge: Option<String>,
@@ -28,15 +32,45 @@ impl Auth0Provider {
             client_secret,
             redirect_url,
             domain,
-            http_client: reqwest::Client::new(),
+            http_client: DEFAULT_CLIENT.clone(),
             scopes: vec![
-                "openid".to_string(),
-                "profile".to_string(),
-                "email".to_string(),
+                "openid".to_owned(),
+                "profile".to_owned(),
+                "email".to_owned(),
             ],
             state: None,
             pkce_challenge: None,
         }
+    }
+
+    pub fn with_scopes(mut self, scopes: &[&str]) -> Self {
+        self.scopes = scopes.iter().copied().map(String::from).collect();
+        self
+    }
+
+    pub fn with_state(mut self, state: &str) -> Self {
+        self.state = Some(state.to_owned());
+        self
+    }
+
+    pub fn with_pkce(mut self, challenge: &str) -> Self {
+        self.pkce_challenge = Some(challenge.to_owned());
+        self
+    }
+
+    pub fn with_http_client(
+        mut self,
+        client: ::std::sync::Arc<dyn crate::client::HttpClient>,
+    ) -> Self {
+        self.http_client = client;
+        self
+    }
+
+    #[cfg(feature = "retry")]
+    pub fn with_retry(mut self, max_retries: u32) -> Self {
+        self.http_client =
+            ::std::sync::Arc::new(crate::client::ReqwestClient::new_with_retry(max_retries));
+        self
     }
 }
 
@@ -54,34 +88,22 @@ impl Provider for Auth0Provider {
         format!("https://{}/authorize?{}", self.domain, params.finish())
     }
 
-    async fn get_user(&self, auth_code: &str) -> Result<ConnectUser, ConnectError> {
-        let token_res = self
-            .http_client
-            .post(self.token_url())
-            .form(&[
-                ("grant_type", "authorization_code"),
-                ("client_id", self.client_id.as_str()),
-                ("client_secret", self.client_secret.as_str()),
-                ("code", auth_code),
-                ("redirect_uri", self.redirect_url.as_str()),
-            ])
-            .send()
-            .await?
-            .error_for_status()?
-            .json::<Value>()
-            .await?;
+    async fn get_user(
+        &self,
+        auth_code: &str,
+    ) -> Result<crate::user::ConnectUser, crate::error::ConnectError> {
+        let token = crate::provider::fetch_access_token(
+            self.http_client.as_ref(),
+            &self.token_url(),
+            &self.client_id,
+            &self.client_secret,
+            auth_code,
+            &self.redirect_url,
+        ).await?;
 
-        let access_token = token_res["access_token"]
-            .as_str()
-            .ok_or_else(|| ConnectError::Token("Failed to get access_token".to_string()))?;
-
-        let mut user = self.get_user_from_token(access_token).await?;
-        user.refresh_token = token_res["refresh_token"]
-            .as_str()
-            .map(|s: &str| s.to_string());
-        user.expires_in = token_res["expires_in"]
-            .as_u64()
-            .or_else(|| token_res["expires_in"].as_i64().map(|v| v as u64));
+        let mut user = self.get_user_from_token(&token.access_token).await?;
+        user.refresh_token = token.refresh_token;
+        user.expires_in = token.expires_in;
         Ok(user)
     }
 
@@ -98,17 +120,17 @@ impl Provider for Auth0Provider {
 
         Ok(ConnectUser {
             id: user_res["sub"].as_str().map(String::from).ok_or_else(|| {
-                crate::error::ConnectError::Provider("Missing user id".to_string())
+                crate::error::ConnectError::Provider("Missing user id".to_owned())
             })?,
             name: user_res["name"]
                 .as_str()
                 .map(String::from)
                 .unwrap_or_default(),
-            email: user_res["email"].as_str().map(|s: &str| s.to_string()),
-            avatar_url: user_res["picture"].as_str().map(|s: &str| s.to_string()),
+            email: user_res["email"].as_str().map(String::from),
+            avatar_url: user_res["picture"].as_str().map(String::from),
             email_verified: user_res["email_verified"].as_bool(),
             raw_data: user_res,
-            access_token: access_token.to_string(),
+            access_token: access_token.to_owned(),
             refresh_token: None,
             expires_in: None,
         })
@@ -118,41 +140,21 @@ impl Provider for Auth0Provider {
         format!("https://{}/oauth/token", self.domain)
     }
 
-    async fn refresh_token(&self, refresh_token: &str) -> Result<ConnectUser, ConnectError> {
-        let token_res = self
-            .http_client
-            .post(self.token_url())
-            .form(&[
-                ("client_id", self.client_id.as_str()),
-                ("client_secret", self.client_secret.as_str()),
-                ("refresh_token", refresh_token),
-                ("grant_type", "refresh_token"),
-            ])
-            .send()
-            .await?
-            .error_for_status()?
-            .json::<Value>()
-            .await?;
+    async fn refresh_token(
+        &self,
+        refresh_token: &str,
+    ) -> Result<crate::user::ConnectUser, crate::error::ConnectError> {
+        let token = crate::provider::fetch_refresh_token(
+            self.http_client.as_ref(),
+            &self.token_url(),
+            &self.client_id,
+            &self.client_secret,
+            refresh_token,
+        ).await?;
 
-        if let Some(err) = token_res["error"].as_str() {
-            let err_desc = token_res["error_description"].as_str().unwrap_or("");
-            return Err(ConnectError::Token(format!(
-                "Provider returned error: {} - {}",
-                err, err_desc
-            )));
-        }
-
-        let access_token = token_res["access_token"].as_str().ok_or_else(|| {
-            ConnectError::Token("Failed to get access_token during refresh".to_string())
-        })?;
-
-        let mut user = self.get_user_from_token(access_token).await?;
-        user.refresh_token = token_res["refresh_token"]
-            .as_str()
-            .map(|s: &str| s.to_string());
-        user.expires_in = token_res["expires_in"]
-            .as_u64()
-            .or_else(|| token_res["expires_in"].as_i64().map(|v| v as u64));
+        let mut user = self.get_user_from_token(&token.access_token).await?;
+        user.refresh_token = token.refresh_token;
+        user.expires_in = token.expires_in;
         Ok(user)
     }
 }

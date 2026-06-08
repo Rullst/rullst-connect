@@ -58,17 +58,17 @@ impl AppleProvider {
     }
 
     pub fn with_scopes(mut self, scopes: &[&str]) -> Self {
-        self.scopes = scopes.iter().map(|s: &&str| s.to_string()).collect();
+        self.scopes = scopes.iter().copied().map(String::from).collect();
         self
     }
 
     pub fn with_state(mut self, state: &str) -> Self {
-        self.state = Some(state.to_string());
+        self.state = Some(state.to_owned());
         self
     }
 
     pub fn with_pkce(mut self, challenge: &str) -> Self {
-        self.pkce_challenge = Some(challenge.to_string());
+        self.pkce_challenge = Some(challenge.to_owned());
         self
     }
 
@@ -166,7 +166,7 @@ impl Provider for AppleProvider {
         user.access_token = access_token;
         user.refresh_token = token_res["refresh_token"]
             .as_str()
-            .map(|s: &str| s.to_string());
+            .map(String::from);
         user.expires_in = token_res["expires_in"]
             .as_u64()
             .or_else(|| token_res["expires_in"].as_i64().map(|v| v as u64));
@@ -212,7 +212,7 @@ impl Provider for AppleProvider {
                 crate::error::ConnectError::Provider("Missing sub in Apple id_token".to_string())
             })?,
             name: String::with_capacity(256), // Developer needs to extract this from the form_post on first login
-            email: payload["email"].as_str().map(|s: &str| s.to_string()),
+            email: payload["email"].as_str().map(String::from),
             avatar_url: None, // Apple does not provide avatars
             email_verified: None,
             raw_data: payload,
@@ -262,7 +262,7 @@ impl Provider for AppleProvider {
         })?;
 
         let mut user = self.get_user_from_token(access_token).await?;
-        user.refresh_token = token_res["refresh_token"].as_str().map(|s| s.to_string());
+        user.refresh_token = token_res["refresh_token"].as_str().map(String::from);
         user.expires_in = token_res["expires_in"]
             .as_u64()
             .or_else(|| token_res["expires_in"].as_i64().map(|v| v as u64));

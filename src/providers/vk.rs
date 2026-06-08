@@ -43,7 +43,7 @@ impl Provider for VkProvider {
         let mut user = self.get_user_from_token(access_token).await?;
         user.refresh_token = token_res["refresh_token"]
             .as_str()
-            .map(|s: &str| s.to_string());
+            .map(String::from);
         user.expires_in = token_res["expires_in"]
             .as_u64()
             .or_else(|| token_res["expires_in"].as_i64().map(|v| v as u64));
@@ -86,7 +86,7 @@ impl Provider for VkProvider {
                 })?,
             name,
             email: None, // Email is generally not available in users.get unless specified and granted
-            avatar_url: user_data["photo_200"].as_str().map(|s: &str| s.to_string()),
+            avatar_url: user_data["photo_200"].as_str().map(String::from),
             email_verified: None,
             raw_data: user_res,
             access_token: access_token.to_string(),
@@ -99,41 +99,21 @@ impl Provider for VkProvider {
         "https://oauth.vk.com/access_token".to_string()
     }
 
-    async fn refresh_token(&self, refresh_token: &str) -> Result<ConnectUser, ConnectError> {
-        let token_res = self
-            .http_client
-            .post(self.token_url())
-            .form(&[
-                ("client_id", self.client_id.as_str()),
-                ("client_secret", self.client_secret.as_str()),
-                ("refresh_token", refresh_token),
-                ("grant_type", "refresh_token"),
-            ])
-            .send()
-            .await?
-            .error_for_status()?
-            .json::<Value>()
-            .await?;
+    async fn refresh_token(
+        &self,
+        refresh_token: &str,
+    ) -> Result<crate::user::ConnectUser, crate::error::ConnectError> {
+        let token = crate::provider::fetch_refresh_token(
+            self.http_client.as_ref(),
+            &self.token_url(),
+            &self.client_id,
+            &self.client_secret,
+            refresh_token,
+        ).await?;
 
-        if let Some(err) = token_res["error"].as_str() {
-            let err_desc = token_res["error_description"].as_str().unwrap_or("");
-            return Err(ConnectError::Token(format!(
-                "Provider returned error: {} - {}",
-                err, err_desc
-            )));
-        }
-
-        let access_token = token_res["access_token"].as_str().ok_or_else(|| {
-            ConnectError::Token("Failed to get access_token during refresh".to_string())
-        })?;
-
-        let mut user = self.get_user_from_token(access_token).await?;
-        user.refresh_token = token_res["refresh_token"]
-            .as_str()
-            .map(|s: &str| s.to_string());
-        user.expires_in = token_res["expires_in"]
-            .as_u64()
-            .or_else(|| token_res["expires_in"].as_i64().map(|v| v as u64));
+        let mut user = self.get_user_from_token(&token.access_token).await?;
+        user.refresh_token = token.refresh_token;
+        user.expires_in = token.expires_in;
         Ok(user)
     }
 }

@@ -31,7 +31,7 @@ macro_rules! define_provider {
                     client_secret,
                     redirect_url,
                     http_client: CLIENT.clone(),
-                    scopes: vec![$($default_scope.to_string()),*],
+                    scopes: vec![$($default_scope.to_owned()),*],
                     state: None,
                     pkce_challenge: None,
                 }
@@ -39,19 +39,19 @@ macro_rules! define_provider {
 
             /// Overrides the default scopes for this provider.
             pub fn with_scopes(mut self, scopes: &[&str]) -> Self {
-                self.scopes = scopes.iter().map(|s| s.to_string()).collect();
+                self.scopes = scopes.iter().copied().map(String::from).collect();
                 self
             }
 
             /// Sets the state parameter for CSRF protection.
             pub fn with_state(mut self, state: &str) -> Self {
-                self.state = Some(state.to_string());
+                self.state = Some(state.to_owned());
                 self
             }
 
             /// Sets the PKCE code_challenge parameter.
             pub fn with_pkce(mut self, challenge: &str) -> Self {
-                self.pkce_challenge = Some(challenge.to_string());
+                self.pkce_challenge = Some(challenge.to_owned());
                 self
             }
 
