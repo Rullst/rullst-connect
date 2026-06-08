@@ -35,7 +35,8 @@ impl Provider for BitbucketProvider {
             &self.client_secret,
             auth_code,
             &self.redirect_url,
-        ).await
+        )
+        .await
     }
 
     async fn get_user_from_token(
@@ -109,6 +110,7 @@ impl Provider for BitbucketProvider {
             &self.client_id,
             &self.client_secret,
             refresh_token,
-        ).await
+        )
+        .await
     }
 }

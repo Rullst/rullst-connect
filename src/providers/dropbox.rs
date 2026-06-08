@@ -35,7 +35,8 @@ impl Provider for DropboxProvider {
             &self.client_secret,
             auth_code,
             &self.redirect_url,
-        ).await?;
+        )
+        .await?;
 
         let mut user = self.get_user_from_token(&token.access_token).await?;
         user.refresh_token = token.refresh_token;
@@ -66,9 +67,7 @@ impl Provider for DropboxProvider {
                 .unwrap_or("")
                 .to_string(),
             email: user_res["email"].as_str().map(String::from),
-            avatar_url: user_res["profile_photo_url"]
-                .as_str()
-                .map(String::from),
+            avatar_url: user_res["profile_photo_url"].as_str().map(String::from),
             email_verified: None,
             raw_data: user_res,
             access_token: access_token.to_string(),
@@ -91,7 +90,8 @@ impl Provider for DropboxProvider {
             &self.client_id,
             &self.client_secret,
             refresh_token,
-        ).await?;
+        )
+        .await?;
 
         let mut user = self.get_user_from_token(&token.access_token).await?;
         user.refresh_token = token.refresh_token;

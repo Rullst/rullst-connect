@@ -34,7 +34,8 @@ impl Provider for SnapchatProvider {
             &self.client_secret,
             auth_code,
             &self.redirect_url,
-        ).await?;
+        )
+        .await?;
 
         let mut user = self.get_user_from_token(&token.access_token).await?;
         user.refresh_token = token.refresh_token;
@@ -67,9 +68,7 @@ impl Provider for SnapchatProvider {
                 .map(String::from)
                 .unwrap_or_default(),
             email: None,
-            avatar_url: me["bitmoji"]["avatar"]
-                .as_str()
-                .map(String::from),
+            avatar_url: me["bitmoji"]["avatar"].as_str().map(String::from),
             email_verified: None,
             raw_data: user_res,
             access_token: access_token.to_string(),
@@ -92,7 +91,8 @@ impl Provider for SnapchatProvider {
             &self.client_id,
             &self.client_secret,
             refresh_token,
-        ).await?;
+        )
+        .await?;
 
         let mut user = self.get_user_from_token(&token.access_token).await?;
         user.refresh_token = token.refresh_token;

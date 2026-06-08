@@ -176,7 +176,10 @@ async fn test_github_refresh_token_error() {
     )
     .with_http_client(intercept_client);
 
-    let err = provider.refresh_token("bad_refresh_token").await.unwrap_err();
+    let err = provider
+        .refresh_token("bad_refresh_token")
+        .await
+        .unwrap_err();
     assert!(matches!(
         err,
         ConnectError::Token(ref message)

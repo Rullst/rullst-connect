@@ -45,9 +45,7 @@ impl Provider for BasecampProvider {
             .ok_or_else(|| ConnectError::Token("Failed to get access_token".to_string()))?;
 
         let mut user = self.get_user_from_token(access_token).await?;
-        user.refresh_token = token_res["refresh_token"]
-            .as_str()
-            .map(String::from);
+        user.refresh_token = token_res["refresh_token"].as_str().map(String::from);
         user.expires_in = token_res["expires_in"]
             .as_u64()
             .or_else(|| token_res["expires_in"].as_i64().map(|v| v as u64));
@@ -78,9 +76,7 @@ impl Provider for BasecampProvider {
                     crate::error::ConnectError::Provider("Missing user id".to_string())
                 })?,
             name,
-            email: identity["email_address"]
-                .as_str()
-                .map(String::from),
+            email: identity["email_address"].as_str().map(String::from),
             avatar_url: None, // Basecamp API doesn't standardly expose an avatar via launchpad
             email_verified: None,
             raw_data: user_res,
@@ -104,7 +100,8 @@ impl Provider for BasecampProvider {
             &self.client_id,
             &self.client_secret,
             refresh_token,
-        ).await?;
+        )
+        .await?;
 
         let mut user = self.get_user_from_token(&token.access_token).await?;
         user.refresh_token = token.refresh_token;

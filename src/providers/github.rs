@@ -53,9 +53,7 @@ impl Provider for GithubProvider {
         })?;
 
         let mut user = self.get_user_from_token(access_token).await?;
-        user.refresh_token = token_res["refresh_token"]
-            .as_str()
-            .map(String::from);
+        user.refresh_token = token_res["refresh_token"].as_str().map(String::from);
         user.expires_in = token_res["expires_in"]
             .as_u64()
             .or_else(|| token_res["expires_in"].as_i64().map(|v| v as u64));
@@ -112,7 +110,8 @@ impl Provider for GithubProvider {
             &self.client_id,
             &self.client_secret,
             refresh_token,
-        ).await?;
+        )
+        .await?;
 
         let mut user = self.get_user_from_token(&token.access_token).await?;
         user.refresh_token = token.refresh_token;
@@ -144,28 +143,29 @@ impl Provider for GithubProvider {
             .as_str()
             .map(String::from)
             .ok_or_else(|| {
-                crate::error::ConnectError::Provider("Missing device_code from Github response".to_string())
+                crate::error::ConnectError::Provider(
+                    "Missing device_code from Github response".to_string(),
+                )
             })?;
-        let user_code = res["user_code"]
-            .as_str()
-            .map(String::from)
-            .ok_or_else(|| {
-                crate::error::ConnectError::Provider("Missing user_code from Github response".to_string())
-            })?;
+        let user_code = res["user_code"].as_str().map(String::from).ok_or_else(|| {
+            crate::error::ConnectError::Provider(
+                "Missing user_code from Github response".to_string(),
+            )
+        })?;
         let verification_uri = res["verification_uri"]
             .as_str()
             .map(String::from)
             .ok_or_else(|| {
-                crate::error::ConnectError::Provider("Missing verification_uri from Github response".to_string())
+                crate::error::ConnectError::Provider(
+                    "Missing verification_uri from Github response".to_string(),
+                )
             })?;
 
         Ok(crate::user::DeviceAuthorizationResponse {
             device_code,
             user_code,
             verification_uri,
-            verification_uri_complete: res["verification_uri_complete"]
-                .as_str()
-                .map(String::from),
+            verification_uri_complete: res["verification_uri_complete"].as_str().map(String::from),
             expires_in: res["expires_in"].as_u64().unwrap_or(900),
             interval: res["interval"].as_u64(),
         })

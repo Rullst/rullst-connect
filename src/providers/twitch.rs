@@ -32,7 +32,8 @@ impl Provider for TwitchProvider {
             &self.client_secret,
             auth_code,
             &self.redirect_url,
-        ).await
+        )
+        .await
     }
 
     async fn get_user_from_token(
@@ -71,9 +72,7 @@ impl Provider for TwitchProvider {
                 .map(String::from)
                 .unwrap_or_default(),
             email: user_data["email"].as_str().map(String::from),
-            avatar_url: user_data["profile_image_url"]
-                .as_str()
-                .map(String::from),
+            avatar_url: user_data["profile_image_url"].as_str().map(String::from),
             email_verified: None,
             raw_data: user_res,
             access_token: access_token.to_string(),
@@ -97,6 +96,7 @@ impl Provider for TwitchProvider {
             &self.client_id,
             &self.client_secret,
             refresh_token,
-        ).await
+        )
+        .await
     }
 }

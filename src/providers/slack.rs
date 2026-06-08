@@ -44,9 +44,7 @@ impl Provider for SlackProvider {
             })?;
 
         let mut user = self.get_user_from_token(access_token).await?;
-        user.refresh_token = token_res["refresh_token"]
-            .as_str()
-            .map(String::from);
+        user.refresh_token = token_res["refresh_token"].as_str().map(String::from);
         user.expires_in = token_res["expires_in"]
             .as_u64()
             .or_else(|| token_res["expires_in"].as_i64().map(|v| v as u64));
@@ -101,7 +99,8 @@ impl Provider for SlackProvider {
             &self.client_id,
             &self.client_secret,
             refresh_token,
-        ).await?;
+        )
+        .await?;
 
         let mut user = self.get_user_from_token(&token.access_token).await?;
         user.refresh_token = token.refresh_token;

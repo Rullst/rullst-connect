@@ -161,14 +161,14 @@ impl Provider for AppleProvider {
             .as_str()
             .map(String::from)
             .ok_or_else(|| {
-                crate::error::ConnectError::Token("Failed to get access_token from Apple".to_string())
+                crate::error::ConnectError::Token(
+                    "Failed to get access_token from Apple".to_string(),
+                )
             })?;
 
         let mut user = self.get_user_from_token(id_token_str).await?;
         user.access_token = access_token;
-        user.refresh_token = token_res["refresh_token"]
-            .as_str()
-            .map(String::from);
+        user.refresh_token = token_res["refresh_token"].as_str().map(String::from);
         user.expires_in = token_res["expires_in"]
             .as_u64()
             .or_else(|| token_res["expires_in"].as_i64().map(|v| v as u64));

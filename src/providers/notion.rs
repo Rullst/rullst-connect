@@ -57,14 +57,10 @@ impl Provider for NotionProvider {
             name: owner["name"].as_str().map(String::from).ok_or_else(|| {
                 crate::error::ConnectError::Provider("Missing user name".to_string())
             })?,
-            email: owner["person"]["email"]
-                .as_str()
-                .map(String::from),
+            email: owner["person"]["email"].as_str().map(String::from),
             avatar_url: owner["avatar_url"].as_str().map(String::from),
             access_token,
-            refresh_token: token_res["refresh_token"]
-                .as_str()
-                .map(String::from),
+            refresh_token: token_res["refresh_token"].as_str().map(String::from),
             expires_in: token_res["expires_in"]
                 .as_u64()
                 .or_else(|| token_res["expires_in"].as_i64().map(|v| v as u64)),
@@ -97,9 +93,7 @@ impl Provider for NotionProvider {
             name: user["name"].as_str().map(String::from).ok_or_else(|| {
                 crate::error::ConnectError::Provider("Missing user name".to_string())
             })?,
-            email: user["person"]["email"]
-                .as_str()
-                .map(String::from),
+            email: user["person"]["email"].as_str().map(String::from),
             avatar_url: user["avatar_url"].as_str().map(String::from),
             email_verified: None,
             raw_data: user_res,
@@ -123,7 +117,8 @@ impl Provider for NotionProvider {
             &self.client_id,
             &self.client_secret,
             refresh_token,
-        ).await?;
+        )
+        .await?;
 
         let mut user = self.get_user_from_token(&token.access_token).await?;
         user.refresh_token = token.refresh_token;

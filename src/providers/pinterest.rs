@@ -42,9 +42,7 @@ impl Provider for PinterestProvider {
             .ok_or_else(|| ConnectError::Token("Failed to get access_token".to_string()))?;
 
         let mut user = self.get_user_from_token(access_token).await?;
-        user.refresh_token = token_res["refresh_token"]
-            .as_str()
-            .map(String::from);
+        user.refresh_token = token_res["refresh_token"].as_str().map(String::from);
         user.expires_in = token_res["expires_in"]
             .as_u64()
             .or_else(|| token_res["expires_in"].as_i64().map(|v| v as u64));
@@ -74,9 +72,7 @@ impl Provider for PinterestProvider {
                 .map(String::from)
                 .unwrap_or_default(), // Pinterest relies on username
             email: None,
-            avatar_url: user_res["profile_image"]
-                .as_str()
-                .map(String::from),
+            avatar_url: user_res["profile_image"].as_str().map(String::from),
             email_verified: None,
             raw_data: user_res,
             access_token: access_token.to_string(),
@@ -99,7 +95,8 @@ impl Provider for PinterestProvider {
             &self.client_id,
             &self.client_secret,
             refresh_token,
-        ).await?;
+        )
+        .await?;
 
         let mut user = self.get_user_from_token(&token.access_token).await?;
         user.refresh_token = token.refresh_token;

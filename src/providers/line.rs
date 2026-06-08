@@ -35,7 +35,8 @@ impl Provider for LineProvider {
             &self.client_secret,
             auth_code,
             &self.redirect_url,
-        ).await?;
+        )
+        .await?;
 
         let mut user = self.get_user_from_token(&token.access_token).await?;
         user.refresh_token = token.refresh_token;
@@ -89,7 +90,8 @@ impl Provider for LineProvider {
             &self.client_id,
             &self.client_secret,
             refresh_token,
-        ).await?;
+        )
+        .await?;
 
         let mut user = self.get_user_from_token(&token.access_token).await?;
         user.refresh_token = token.refresh_token;
