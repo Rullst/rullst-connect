@@ -20,9 +20,9 @@ macro_rules! define_provider {
 
         impl $name {
             pub fn new(client_id: String, client_secret: String, redirect_url: String) -> Self {
-                debug_assert!(!client_id.is_empty(), "Socialite Error: client_id cannot be empty");
-                debug_assert!(!client_secret.is_empty(), "Socialite Error: client_secret cannot be empty");
-                debug_assert!(redirect_url.starts_with("http"), "Socialite Error: redirect_url must be a valid HTTP/HTTPS URL");
+                assert!(!client_id.is_empty(), "Socialite Error: client_id cannot be empty");
+                assert!(!client_secret.is_empty(), "Socialite Error: client_secret cannot be empty");
+                assert!(redirect_url.starts_with("http"), "Socialite Error: redirect_url must be a valid HTTP/HTTPS URL");
 
                 static CLIENT: ::std::sync::LazyLock<::std::sync::Arc<dyn $crate::client::HttpClient>> =
                     ::std::sync::LazyLock::new(|| ::std::sync::Arc::new($crate::client::ReqwestClient::new()));
@@ -31,7 +31,7 @@ macro_rules! define_provider {
                     client_secret,
                     redirect_url,
                     http_client: CLIENT.clone(),
-                    scopes: vec![$($default_scope.to_string()),*],
+                    scopes: vec![$($default_scope.to_owned()),*],
                     state: None,
                     pkce_challenge: None,
                 }
@@ -39,19 +39,19 @@ macro_rules! define_provider {
 
             /// Overrides the default scopes for this provider.
             pub fn with_scopes(mut self, scopes: &[&str]) -> Self {
-                self.scopes = scopes.iter().map(|s| s.to_string()).collect();
+                self.scopes = scopes.iter().copied().map(String::from).collect();
                 self
             }
 
             /// Sets the state parameter for CSRF protection.
             pub fn with_state(mut self, state: &str) -> Self {
-                self.state = Some(state.to_string());
+                self.state = Some(state.to_owned());
                 self
             }
 
             /// Sets the PKCE code_challenge parameter.
             pub fn with_pkce(mut self, challenge: &str) -> Self {
-                self.pkce_challenge = Some(challenge.to_string());
+                self.pkce_challenge = Some(challenge.to_owned());
                 self
             }
 

@@ -128,17 +128,17 @@ impl OidcProvider {
     }
 
     pub fn with_scopes(mut self, scopes: &[&str]) -> Self {
-        self.scopes = scopes.iter().map(|s| s.to_string()).collect();
+        self.scopes = scopes.iter().copied().map(String::from).collect();
         self
     }
 
     pub fn with_state(mut self, state: &str) -> Self {
-        self.state = Some(state.to_string());
+        self.state = Some(state.to_owned());
         self
     }
 
     pub fn with_pkce(mut self, challenge: &str) -> Self {
-        self.pkce_challenge = Some(challenge.to_string());
+        self.pkce_challenge = Some(challenge.to_owned());
         self
     }
 
@@ -222,28 +222,29 @@ impl Provider for OidcProvider {
                 let payload = token_data.claims;
                 ConnectUser {
                     id: payload["sub"].as_str().map(String::from).ok_or_else(|| {
-                        crate::error::ConnectError::Provider("Missing sub in id_token".to_string())
+                        crate::error::ConnectError::Provider("Missing sub in id_token".to_owned())
                     })?,
                     name: payload["name"].as_str().map(String::from).ok_or_else(|| {
-                        crate::error::ConnectError::Provider("Missing name in id_token".to_string())
+                        crate::error::ConnectError::Provider("Missing name in id_token".to_owned())
                     })?,
-                    email: payload["email"].as_str().map(|s: &str| s.to_string()),
-                    avatar_url: payload["picture"].as_str().map(|s: &str| s.to_string()),
+                    email: payload["email"].as_str().map(String::from),
+                    avatar_url: payload["picture"].as_str().map(String::from),
                     email_verified: payload["email_verified"].as_bool(),
                     raw_data: payload,
-                    access_token: access_token.to_string(),
+                    access_token: access_token.to_owned(),
                     refresh_token: None,
                     expires_in: None,
                 }
             } else {
-                // If kid is missing from header, cleanly skip signature validation and fallback to secure /userinfo
-                self.get_user_from_token(access_token).await?
+                return Err(crate::error::ConnectError::Provider(
+                    "Missing 'kid' header in OIDC id_token".to_owned(),
+                ));
             }
         } else {
             self.get_user_from_token(access_token).await?
         };
 
-        user.refresh_token = token_res["refresh_token"].as_str().map(|s| s.to_string());
+        user.refresh_token = token_res["refresh_token"].as_str().map(String::from);
         user.expires_in = token_res["expires_in"]
             .as_u64()
             .or_else(|| token_res["expires_in"].as_i64().map(|v| v as u64));
@@ -265,16 +266,16 @@ impl Provider for OidcProvider {
 
         Ok(ConnectUser {
             id: user_res["sub"].as_str().map(String::from).ok_or_else(|| {
-                crate::error::ConnectError::Provider("Missing sub in userinfo".to_string())
+                crate::error::ConnectError::Provider("Missing sub in userinfo".to_owned())
             })?,
             name: user_res["name"].as_str().map(String::from).ok_or_else(|| {
-                crate::error::ConnectError::Provider("Missing name in userinfo".to_string())
+                crate::error::ConnectError::Provider("Missing name in userinfo".to_owned())
             })?,
-            email: user_res["email"].as_str().map(|s: &str| s.to_string()),
-            avatar_url: user_res["picture"].as_str().map(|s: &str| s.to_string()),
+            email: user_res["email"].as_str().map(String::from),
+            avatar_url: user_res["picture"].as_str().map(String::from),
             email_verified: user_res["email_verified"].as_bool(),
             raw_data: user_res,
-            access_token: access_token.to_string(),
+            access_token: access_token.to_owned(),
             refresh_token: None,
             expires_in: None,
         })

@@ -73,6 +73,7 @@ async fn token_handler(Form(form): Form<TokenForm>) -> impl IntoResponse {
     }
 
     // A fake JWT for the id_token
+    // ⚠️ WARNING: alg: none is ONLY safe for local testing. Never use in production.
     let header = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(b"{\"alg\":\"none\"}");
     let payload = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(
         b"{\"sub\":\"mock_user_999\",\"name\":\"Mock User\",\"email\":\"mock@example.com\",\"email_verified\":true}"
@@ -109,6 +110,7 @@ async fn discovery_handler() -> impl IntoResponse {
         "jwks_uri": "http://localhost:8080/jwks",
         "response_types_supported": ["code"],
         "subject_types_supported": ["public"],
+        // ⚠️ WARNING: alg: none is ONLY safe for local testing. Never use in production.
         "id_token_signing_alg_values_supported": ["RS256", "none"]
     }))
 }

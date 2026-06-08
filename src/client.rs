@@ -69,17 +69,17 @@ impl<'a> RequestBuilder<'a> {
     }
 
     pub fn bearer_auth(mut self, token: &str) -> Self {
-        self.req.bearer_auth = Some(token.to_string());
+        self.req.bearer_auth = Some(token.to_owned());
         self
     }
 
     pub fn basic_auth(mut self, username: &str, password: Option<&str>) -> Self {
-        self.req.basic_auth = Some((username.to_string(), password.map(|s| s.to_string())));
+        self.req.basic_auth = Some((username.to_owned(), password.map(String::from)));
         self
     }
 
-    pub fn json(mut self, value: &Value) -> Self {
-        self.req.json = Some(value.clone());
+    pub fn json(mut self, value: Value) -> Self {
+        self.req.json = Some(value);
         self
     }
 
@@ -344,13 +344,13 @@ mod tests {
 
         let builder = RequestBuilder::new(
             &client,
-            "POST".to_string(),
-            "https://example.com/api".to_string(),
+            "POST".to_owned(),
+            "https://example.com/api".to_owned(),
         )
         .header("X-Test", "Value")
         .bearer_auth("my_token")
         .basic_auth("username", Some("password"))
-        .json(&json!({"hello": "world"}))
+        .json(json!({"hello": "world"}))
         .form(&[("param1", "val1"), ("param2", "val2")]);
 
         let wrapper = builder.send().await.expect("Failed to send request");
@@ -467,6 +467,23 @@ mod tests {
             crate::error::ConnectError::ProviderApiError { code, message } => {
                 assert_eq!(code, "HTTP_403");
                 assert_eq!(message, "Forbidden plain text explanation");
+            }
+            _ => panic!("Expected ProviderApiError"),
+        }
+
+        // Test case 6: >= 400 with empty/null JSON body
+        let empty_body_wrapper = ResponseWrapper {
+            res: HttpResponse {
+                status: 400,
+                body: serde_json::Value::Null,
+            },
+        };
+        let empty_body_res = empty_body_wrapper.error_for_status();
+        assert!(empty_body_res.is_err());
+        match empty_body_res.expect_err("Expected error status") {
+            crate::error::ConnectError::ProviderApiError { code, message } => {
+                assert_eq!(code, "HTTP_400");
+                assert_eq!(message, "Unknown error");
             }
             _ => panic!("Expected ProviderApiError"),
         }

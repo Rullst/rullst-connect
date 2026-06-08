@@ -51,17 +51,17 @@ impl GoogleProvider {
     }
 
     pub fn with_scopes(mut self, scopes: &[&str]) -> Self {
-        self.scopes = scopes.iter().map(|s| s.to_string()).collect();
+        self.scopes = scopes.iter().copied().map(String::from).collect();
         self
     }
 
     pub fn with_state(mut self, state: &str) -> Self {
-        self.state = Some(state.to_string());
+        self.state = Some(state.to_owned());
         self
     }
 
     pub fn with_pkce(mut self, challenge: &str) -> Self {
-        self.pkce_challenge = Some(challenge.to_string());
+        self.pkce_challenge = Some(challenge.to_owned());
         self
     }
 
@@ -132,7 +132,7 @@ impl Provider for GoogleProvider {
             .await?;
 
         let access_token = token_res["access_token"].as_str().ok_or_else(|| {
-            crate::error::ConnectError::Token("Failed to get access_token".to_string())
+            crate::error::ConnectError::Token("Failed to get access_token".to_owned())
         })?;
 
         let mut user = if let Some(id_token) = token_res["id_token"].as_str() {
@@ -178,23 +178,24 @@ impl Provider for GoogleProvider {
                 ConnectUser {
                     id: p["sub"].as_str().map(String::from).ok_or_else(|| {
                         crate::error::ConnectError::Provider(
-                            "Missing sub claim in Google id_token".to_string(),
+                            "Missing sub claim in Google id_token".to_owned(),
                         )
                     })?,
                     name: p["name"].as_str().map(String::from).unwrap_or_default(),
-                    email: p["email"].as_str().map(|s: &str| s.to_string()),
+                    email: p["email"].as_str().map(String::from),
                     avatar_url: p["picture"]
                         .as_str()
                         .map(|s: &str| s.replace("=s96-c", "=s400-c")),
                     email_verified: p["email_verified"].as_bool(),
                     raw_data: p,
-                    access_token: access_token.to_string(),
+                    access_token: access_token.to_owned(),
                     refresh_token: None,
                     expires_in: None,
                 }
             } else {
-                // If kid is missing from header, skip validation and fallback to secure /userinfo
-                self.get_user_from_token(access_token).await?
+                return Err(crate::error::ConnectError::Provider(
+                    "Missing 'kid' header in Google id_token".to_owned(),
+                ));
             }
         } else {
             self.get_user_from_token(access_token).await?
@@ -202,7 +203,7 @@ impl Provider for GoogleProvider {
 
         user.refresh_token = token_res["refresh_token"]
             .as_str()
-            .map(|s: &str| s.to_string());
+            .map(String::from);
         user.expires_in = token_res["expires_in"]
             .as_u64()
             .or_else(|| token_res["expires_in"].as_i64().map(|v| v as u64));
@@ -226,19 +227,19 @@ impl Provider for GoogleProvider {
 
         Ok(ConnectUser {
             id: user_res["sub"].as_str().map(String::from).ok_or_else(|| {
-                crate::error::ConnectError::Provider("Missing sub in userinfo".to_string())
+                crate::error::ConnectError::Provider("Missing sub in userinfo".to_owned())
             })?,
             name: user_res["name"]
                 .as_str()
                 .map(String::from)
                 .unwrap_or_default(),
-            email: user_res["email"].as_str().map(|s: &str| s.to_string()),
+            email: user_res["email"].as_str().map(String::from),
             avatar_url: user_res["picture"]
                 .as_str()
                 .map(|s: &str| s.replace("=s96-c", "=s400-c")),
             email_verified: user_res["email_verified"].as_bool(),
             raw_data: user_res,
-            access_token: access_token.to_string(),
+            access_token: access_token.to_owned(),
             refresh_token: None,
             expires_in: None,
         })
@@ -262,40 +263,17 @@ impl Provider for GoogleProvider {
         &self,
         refresh_token: &str,
     ) -> Result<ConnectUser, crate::error::ConnectError> {
-        let token_res = self
-            .http_client
-            .post(self.token_url())
-            .form(&[
-                ("client_id", self.client_id.as_str()),
-                ("client_secret", self.client_secret.as_str()),
-                ("refresh_token", refresh_token),
-                ("grant_type", "refresh_token"),
-            ])
-            .send()
-            .await?
-            .error_for_status()?
-            .json::<serde_json::Value>()
-            .await?;
+        let token = crate::provider::fetch_refresh_token(
+            self.http_client.as_ref(),
+            &self.token_url(),
+            &self.client_id,
+            &self.client_secret,
+            refresh_token,
+        ).await?;
 
-        if let Some(err) = token_res["error"].as_str() {
-            let err_desc = token_res["error_description"].as_str().unwrap_or_default();
-            return Err(crate::error::ConnectError::Token(format!(
-                "Provider returned error: {} - {}",
-                err, err_desc
-            )));
-        }
-
-        let access_token = token_res["access_token"].as_str().ok_or_else(|| {
-            crate::error::ConnectError::Token(
-                "Failed to get access_token during refresh".to_string(),
-            )
-        })?;
-
-        let mut user = self.get_user_from_token(access_token).await?;
-        user.refresh_token = token_res["refresh_token"].as_str().map(|s| s.to_string());
-        user.expires_in = token_res["expires_in"]
-            .as_u64()
-            .or_else(|| token_res["expires_in"].as_i64().map(|v| v as u64));
+        let mut user = self.get_user_from_token(&token.access_token).await?;
+        user.refresh_token = token.refresh_token;
+        user.expires_in = token.expires_in;
         Ok(user)
     }
 }

@@ -1,4 +1,5 @@
 use crate::user::ConnectUser;
+use crate::client::HttpClientExt;
 use async_trait::async_trait;
 
 /// Helper to construct standard OAuth2 parameters to reduce boilerplate.
@@ -40,7 +41,8 @@ pub trait Provider: Send + Sync {
     fn redirect_url_with_state(&self, state: &str) -> String {
         let url = self.redirect_url();
         let separator = if url.contains('?') { "&" } else { "?" };
-        format!("{url}{separator}state={state}")
+        let encoded_state = url::form_urlencoded::byte_serialize(state.as_bytes()).collect::<String>();
+        format!("{url}{separator}state={encoded_state}")
     }
 
     /// Returns the authorization URL with a PKCE `code_challenge` appended.
@@ -48,9 +50,10 @@ pub trait Provider: Send + Sync {
     fn redirect_url_with_pkce(&self, code_challenge: &str) -> String {
         let url = self.redirect_url();
         let separator = if url.contains('?') { "&" } else { "?" };
+        let encoded_challenge = url::form_urlencoded::byte_serialize(code_challenge.as_bytes()).collect::<String>();
         format!(
             "{}{}code_challenge={}&code_challenge_method=S256",
-            url, separator, code_challenge
+            url, separator, encoded_challenge
         )
     }
 
@@ -58,9 +61,11 @@ pub trait Provider: Send + Sync {
     fn redirect_url_with_pkce_and_state(&self, code_challenge: &str, state: &str) -> String {
         let url = self.redirect_url();
         let separator = if url.contains('?') { "&" } else { "?" };
+        let encoded_challenge = url::form_urlencoded::byte_serialize(code_challenge.as_bytes()).collect::<String>();
+        let encoded_state = url::form_urlencoded::byte_serialize(state.as_bytes()).collect::<String>();
         format!(
             "{}{}code_challenge={}&code_challenge_method=S256&state={}",
-            url, separator, code_challenge, state
+            url, separator, encoded_challenge, encoded_state
         )
     }
 
@@ -126,6 +131,170 @@ pub trait Provider: Send + Sync {
             "Device Authorization is not supported by this provider".into(),
         ))
     }
+}
+
+/// The response containing token information from a standard OAuth2 exchange.
+#[derive(Debug, Clone)]
+pub struct Oauth2TokenResponse {
+    pub access_token: String,
+    pub refresh_token: Option<String>,
+    pub expires_in: Option<u64>,
+}
+
+/// Helper to exchange an authorization code for access tokens using standard OAuth2.
+pub async fn fetch_access_token(
+    client: &dyn crate::client::HttpClient,
+    token_url: &str,
+    client_id: &str,
+    client_secret: &str,
+    code: &str,
+    redirect_url: &str,
+) -> Result<Oauth2TokenResponse, crate::error::ConnectError> {
+    let token_res = client
+        .post(token_url)
+        .form(&[
+            ("grant_type", "authorization_code"),
+            ("client_id", client_id),
+            ("client_secret", client_secret),
+            ("code", code),
+            ("redirect_uri", redirect_url),
+        ])
+        .send()
+        .await?
+        .error_for_status()?
+        .json::<serde_json::Value>()
+        .await?;
+
+    if let Some(err) = token_res["error"].as_str() {
+        let err_desc = token_res["error_description"].as_str().unwrap_or("");
+        return Err(crate::error::ConnectError::Token(format!(
+            "Provider returned error: {} - {}",
+            err, err_desc
+        )));
+    }
+
+    let access_token = token_res["access_token"]
+        .as_str()
+        .ok_or_else(|| {
+            crate::error::ConnectError::Token("Failed to get access_token".to_owned())
+        })?
+        .to_owned();
+
+    let refresh_token = token_res["refresh_token"].as_str().map(String::from);
+    let expires_in = token_res["expires_in"]
+        .as_u64()
+        .or_else(|| token_res["expires_in"].as_i64().map(|v| v as u64));
+
+    Ok(Oauth2TokenResponse {
+        access_token,
+        refresh_token,
+        expires_in,
+    })
+}
+
+/// Helper to exchange a refresh token for new access tokens using standard OAuth2.
+pub async fn fetch_refresh_token(
+    client: &dyn crate::client::HttpClient,
+    token_url: &str,
+    client_id: &str,
+    client_secret: &str,
+    refresh_token: &str,
+) -> Result<Oauth2TokenResponse, crate::error::ConnectError> {
+    let token_res = client
+        .post(token_url)
+        .form(&[
+            ("client_id", client_id),
+            ("client_secret", client_secret),
+            ("refresh_token", refresh_token),
+            ("grant_type", "refresh_token"),
+        ])
+        .send()
+        .await?
+        .error_for_status()?
+        .json::<serde_json::Value>()
+        .await?;
+
+    if let Some(err) = token_res["error"].as_str() {
+        let err_desc = token_res["error_description"].as_str().unwrap_or("");
+        return Err(crate::error::ConnectError::Token(format!(
+            "Provider returned error: {} - {}",
+            err, err_desc
+        )));
+    }
+
+    let access_token = token_res["access_token"].as_str().ok_or_else(|| {
+        crate::error::ConnectError::Token(
+            "Failed to get access_token during refresh".to_owned(),
+        )
+    })?
+    .to_owned();
+
+    let refresh_token = token_res["refresh_token"].as_str().map(String::from);
+    let expires_in = token_res["expires_in"]
+        .as_u64()
+        .or_else(|| token_res["expires_in"].as_i64().map(|v| v as u64));
+
+    Ok(Oauth2TokenResponse {
+        access_token,
+        refresh_token,
+        expires_in,
+    })
+}
+
+/// Helper to exchange an authorization code and build the ConnectUser profile.
+pub async fn exchange_and_get_user<P>(
+    provider: &P,
+    client: &dyn crate::client::HttpClient,
+    token_url: &str,
+    client_id: &str,
+    client_secret: &str,
+    auth_code: &str,
+    redirect_url: &str,
+) -> Result<ConnectUser, crate::error::ConnectError>
+where
+    P: Provider + ?Sized,
+{
+    let token = fetch_access_token(
+        client,
+        token_url,
+        client_id,
+        client_secret,
+        auth_code,
+        redirect_url,
+    )
+    .await?;
+
+    let mut user = provider.get_user_from_token(&token.access_token).await?;
+    user.refresh_token = token.refresh_token;
+    user.expires_in = token.expires_in;
+    Ok(user)
+}
+
+/// Helper to refresh an access token and fetch the updated ConnectUser profile.
+pub async fn refresh_and_get_user<P>(
+    provider: &P,
+    client: &dyn crate::client::HttpClient,
+    token_url: &str,
+    client_id: &str,
+    client_secret: &str,
+    refresh_token: &str,
+) -> Result<ConnectUser, crate::error::ConnectError>
+where
+    P: Provider + ?Sized,
+{
+    let token = fetch_refresh_token(
+        client,
+        token_url,
+        client_id,
+        client_secret,
+        refresh_token,
+    )
+    .await?;
+
+    let mut user = provider.get_user_from_token(&token.access_token).await?;
+    user.refresh_token = token.refresh_token;
+    user.expires_in = token.expires_in;
+    Ok(user)
 }
 
 #[cfg(test)]
@@ -232,5 +401,57 @@ mod tests {
             }
             _ => panic!("Expected ConnectError::Token"),
         }
+    }
+
+    #[tokio::test]
+    async fn test_default_poll_device_token() {
+        let provider = DummyProvider {
+            base_url: "".to_string(),
+        };
+        let result = provider.poll_device_token("some_code").await;
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ConnectError::Provider(msg) => {
+                assert_eq!(msg, "Device Authorization is not supported by this provider");
+            }
+            _ => panic!("Expected ConnectError::Provider"),
+        }
+    }
+
+    #[test]
+    fn test_redirect_url_with_pkce_and_state_multiple_query_params() {
+        let provider_multiple_query = DummyProvider {
+            base_url: "https://example.com/auth?foo=bar&baz=qux".to_string(),
+        };
+        assert_eq!(
+            provider_multiple_query.redirect_url_with_pkce_and_state("my_challenge", "my_state"),
+            "https://example.com/auth?foo=bar&baz=qux&code_challenge=my_challenge&code_challenge_method=S256&state=my_state"
+        );
+    }
+
+    #[test]
+    fn test_build_oauth_params_variations() {
+        // 1. Empty scopes
+        let mut serializer = build_oauth_params("client", "redirect", &[], None, None);
+        let query = serializer.finish();
+        assert!(query.contains("client_id=client"));
+        assert!(query.contains("redirect_uri=redirect"));
+        assert!(!query.contains("scope"));
+
+        // 2. Single scope
+        let scopes_single = [String::from("read")];
+        let mut serializer = build_oauth_params("client", "redirect", &scopes_single, None, None);
+        let query = serializer.finish();
+        assert!(query.contains("scope=read"));
+
+        // 3. Multiple scopes
+        let scopes_multiple = [String::from("read"), String::from("write")];
+        let mut serializer = build_oauth_params("client", "redirect", &scopes_multiple, Some("state123"), Some("pkce_challenge"));
+        let query = serializer.finish();
+        assert!(query.contains("scope=read+write"));
+        assert!(query.contains("state=state123"));
+        assert!(query.contains("code_challenge=pkce_challenge"));
+        assert!(query.contains("code_challenge_method=S256"));
     }
 }

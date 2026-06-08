@@ -55,7 +55,7 @@ impl Provider for GithubProvider {
         let mut user = self.get_user_from_token(access_token).await?;
         user.refresh_token = token_res["refresh_token"]
             .as_str()
-            .map(|s: &str| s.to_string());
+            .map(String::from);
         user.expires_in = token_res["expires_in"]
             .as_u64()
             .or_else(|| token_res["expires_in"].as_i64().map(|v| v as u64));
@@ -88,8 +88,8 @@ impl Provider for GithubProvider {
                 .as_str()
                 .unwrap_or(user_res["login"].as_str().unwrap_or(""))
                 .to_string(),
-            email: user_res["email"].as_str().map(|s: &str| s.to_string()),
-            avatar_url: user_res["avatar_url"].as_str().map(|s: &str| s.to_string()),
+            email: user_res["email"].as_str().map(String::from),
+            avatar_url: user_res["avatar_url"].as_str().map(String::from),
             email_verified: None,
             raw_data: user_res,
             access_token: access_token.to_string(),
@@ -105,41 +105,18 @@ impl Provider for GithubProvider {
     async fn refresh_token(
         &self,
         refresh_token: &str,
-    ) -> Result<ConnectUser, crate::error::ConnectError> {
-        let token_res = self
-            .http_client
-            .post(self.token_url())
-            .form(&[
-                ("client_id", self.client_id.as_str()),
-                ("client_secret", self.client_secret.as_str()),
-                ("refresh_token", refresh_token),
-                ("grant_type", "refresh_token"),
-            ])
-            .send()
-            .await?
-            .error_for_status()?
-            .json::<serde_json::Value>()
-            .await?;
+    ) -> Result<crate::user::ConnectUser, crate::error::ConnectError> {
+        let token = crate::provider::fetch_refresh_token(
+            self.http_client.as_ref(),
+            &self.token_url(),
+            &self.client_id,
+            &self.client_secret,
+            refresh_token,
+        ).await?;
 
-        if let Some(err) = token_res["error"].as_str() {
-            let err_desc = token_res["error_description"].as_str().unwrap_or("");
-            return Err(crate::error::ConnectError::Token(format!(
-                "Provider returned error: {} - {}",
-                err, err_desc
-            )));
-        }
-
-        let access_token = token_res["access_token"].as_str().ok_or_else(|| {
-            crate::error::ConnectError::Token(
-                "Failed to get access_token during refresh".to_string(),
-            )
-        })?;
-
-        let mut user = self.get_user_from_token(access_token).await?;
-        user.refresh_token = token_res["refresh_token"].as_str().map(|s| s.to_string());
-        user.expires_in = token_res["expires_in"]
-            .as_u64()
-            .or_else(|| token_res["expires_in"].as_i64().map(|v| v as u64));
+        let mut user = self.get_user_from_token(&token.access_token).await?;
+        user.refresh_token = token.refresh_token;
+        user.expires_in = token.expires_in;
         Ok(user)
     }
 
@@ -163,22 +140,32 @@ impl Provider for GithubProvider {
             .json::<Value>()
             .await?;
 
+        let device_code = res["device_code"]
+            .as_str()
+            .map(String::from)
+            .ok_or_else(|| {
+                crate::error::ConnectError::Provider("Missing device_code from Github response".to_string())
+            })?;
+        let user_code = res["user_code"]
+            .as_str()
+            .map(String::from)
+            .ok_or_else(|| {
+                crate::error::ConnectError::Provider("Missing user_code from Github response".to_string())
+            })?;
+        let verification_uri = res["verification_uri"]
+            .as_str()
+            .map(String::from)
+            .ok_or_else(|| {
+                crate::error::ConnectError::Provider("Missing verification_uri from Github response".to_string())
+            })?;
+
         Ok(crate::user::DeviceAuthorizationResponse {
-            device_code: res["device_code"]
-                .as_str()
-                .map(String::from)
-                .unwrap_or_default(),
-            user_code: res["user_code"]
-                .as_str()
-                .map(String::from)
-                .unwrap_or_default(),
-            verification_uri: res["verification_uri"]
-                .as_str()
-                .map(String::from)
-                .unwrap_or_default(),
+            device_code,
+            user_code,
+            verification_uri,
             verification_uri_complete: res["verification_uri_complete"]
                 .as_str()
-                .map(|s| s.to_string()),
+                .map(String::from),
             expires_in: res["expires_in"].as_u64().unwrap_or(900),
             interval: res["interval"].as_u64(),
         })
@@ -219,7 +206,7 @@ impl Provider for GithubProvider {
         })?;
 
         let mut user = self.get_user_from_token(access_token).await?;
-        user.refresh_token = token_res["refresh_token"].as_str().map(|s| s.to_string());
+        user.refresh_token = token_res["refresh_token"].as_str().map(String::from);
         user.expires_in = token_res["expires_in"]
             .as_u64()
             .or_else(|| token_res["expires_in"].as_i64().map(|v| v as u64));

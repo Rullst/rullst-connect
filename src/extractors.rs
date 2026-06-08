@@ -75,6 +75,7 @@ impl actix_web::FromRequest for AuthCallback {
 }
 
 #[cfg(feature = "axum-session")]
+#[derive(Debug, Clone)]
 pub struct AuthSession {
     pub callback: AuthCallback,
 }
@@ -106,23 +107,26 @@ where
                 .await
                 .map_err(axum::response::IntoResponse::into_response)?;
 
-        if let Some(state_param) = &callback.state {
-            let session_state: Option<String> = session.get("oauth_state").await.unwrap_or(None);
-            if let Some(saved) = session_state
-                && state_param == &saved
-            {
-                // Valid! Remove it so it can't be reused
-                let _ = session.remove::<String>("oauth_state").await;
-                return Ok(Self { callback });
-            }
+        let state_param = callback.state.as_ref().ok_or_else(|| {
+            axum::response::IntoResponse::into_response((
+                axum::http::StatusCode::BAD_REQUEST,
+                "Missing CSRF state parameter",
+            ))
+        })?;
 
-            return Err(axum::response::IntoResponse::into_response((
+        let session_state: Option<String> = session.get("oauth_state").await.unwrap_or(None);
+        if let Some(saved) = session_state
+            && state_param == &saved
+        {
+            // Valid! Remove it so it can't be reused
+            let _ = session.remove::<String>("oauth_state").await;
+            Ok(Self { callback })
+        } else {
+            Err(axum::response::IntoResponse::into_response((
                 axum::http::StatusCode::BAD_REQUEST,
                 "CSRF state mismatch",
-            )));
+            )))
         }
-
-        Ok(Self { callback })
     }
 }
 
@@ -168,4 +172,166 @@ mod tests {
         assert_eq!(callback.error, None);
         assert_eq!(callback.error_description, None);
     }
+
+    #[test]
+    fn test_verify_state() {
+        // 1. Valid state matching
+        let callback_valid = AuthCallback {
+            code: None,
+            state: Some("state_123".to_owned()),
+            error: None,
+            error_description: None,
+        };
+        assert!(callback_valid.verify_state("state_123").is_ok());
+
+        // 2. State mismatch
+        let res_mismatch = callback_valid.verify_state("state_xyz");
+        assert!(res_mismatch.is_err());
+        match res_mismatch.unwrap_err() {
+            crate::error::ConnectError::InvalidState(msg) => {
+                assert_eq!(msg, "CSRF state mismatch");
+            }
+            _ => panic!("Expected ConnectError::InvalidState"),
+        }
+
+        // 3. State missing
+        let callback_missing = AuthCallback {
+            code: None,
+            state: None,
+            error: None,
+            error_description: None,
+        };
+        let res_missing = callback_missing.verify_state("state_123");
+        assert!(res_missing.is_err());
+        match res_missing.unwrap_err() {
+            crate::error::ConnectError::InvalidState(msg) => {
+                assert_eq!(msg, "State missing in callback");
+            }
+            _ => panic!("Expected ConnectError::InvalidState"),
+        }
+
+        // 4. Empty state string edge cases
+        let callback_empty = AuthCallback {
+            code: None,
+            state: Some("".to_owned()),
+            error: None,
+            error_description: None,
+        };
+        assert!(callback_empty.verify_state("").is_ok());
+        assert!(callback_empty.verify_state("not_empty").is_err());
+        assert!(callback_valid.verify_state("").is_err());
+    }
+
+    #[cfg(feature = "actix")]
+    #[tokio::test]
+    async fn test_actix_extractor() {
+        use actix_web::FromRequest;
+        
+        let req = actix_web::test::TestRequest::with_uri("/callback?code=actix_code&state=actix_state").to_http_request();
+        let payload = &mut actix_web::dev::Payload::None;
+        let callback = AuthCallback::from_request(&req, payload).await.unwrap();
+        assert_eq!(callback.code.as_deref(), Some("actix_code"));
+        assert_eq!(callback.state.as_deref(), Some("actix_state"));
+
+        // Test error case (invalid query format)
+        let req_err = actix_web::test::TestRequest::with_uri("/callback?code=a&code=b").to_http_request();
+        let res_err = AuthCallback::from_request(&req_err, payload).await;
+        assert!(res_err.is_err());
+    }
+
+    #[cfg(feature = "axum-session")]
+    #[tokio::test]
+    async fn test_axum_session_extractor_success() {
+        use axum::extract::FromRequestParts;
+        use tower_sessions::{MemoryStore, Session};
+        use std::sync::Arc;
+
+        // 1. Create a session and set state in it
+        let store = Arc::new(MemoryStore::default());
+        let session = Session::new(None, store, None);
+        session.insert("oauth_state", "state_123".to_owned()).await.unwrap();
+
+        // 2. Build a request with the session in extensions and the query parameters
+        let mut req = axum::http::Request::builder()
+            .uri("/callback?code=auth_code_123&state=state_123")
+            .body(())
+            .unwrap();
+        req.extensions_mut().insert(session);
+
+        let (mut parts, _) = req.into_parts();
+        
+        // 3. Extract AuthSession
+        let auth_session = AuthSession::from_request_parts(&mut parts, &()).await.unwrap();
+        assert_eq!(auth_session.callback.code.as_deref(), Some("auth_code_123"));
+        assert_eq!(auth_session.callback.state.as_deref(), Some("state_123"));
+    }
+
+    #[cfg(feature = "axum-session")]
+    #[tokio::test]
+    async fn test_axum_session_extractor_mismatch() {
+        use axum::extract::FromRequestParts;
+        use tower_sessions::{MemoryStore, Session};
+        use std::sync::Arc;
+
+        let store = Arc::new(MemoryStore::default());
+        let session = Session::new(None, store, None);
+        session.insert("oauth_state", "different_state".to_owned()).await.unwrap();
+
+        let mut req = axum::http::Request::builder()
+            .uri("/callback?code=auth_code_123&state=state_123")
+            .body(())
+            .unwrap();
+        req.extensions_mut().insert(session);
+
+        let (mut parts, _) = req.into_parts();
+        
+        let res = AuthSession::from_request_parts(&mut parts, &()).await;
+        assert!(res.is_err());
+        let response = res.unwrap_err();
+        assert_eq!(response.status(), axum::http::StatusCode::BAD_REQUEST);
+    }
+
+    #[cfg(feature = "axum-session")]
+    #[tokio::test]
+    async fn test_axum_session_extractor_missing_extension() {
+        use axum::extract::FromRequestParts;
+
+        let req = axum::http::Request::builder()
+            .uri("/callback?code=auth_code_123&state=state_123")
+            .body(())
+            .unwrap();
+
+        let (mut parts, _) = req.into_parts();
+        
+        let res = AuthSession::from_request_parts(&mut parts, &()).await;
+        assert!(res.is_err());
+        let response = res.unwrap_err();
+        assert_eq!(response.status(), axum::http::StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    #[cfg(feature = "axum-session")]
+    #[tokio::test]
+    async fn test_axum_session_extractor_missing_state() {
+        use axum::extract::FromRequestParts;
+        use tower_sessions::{MemoryStore, Session};
+        use std::sync::Arc;
+
+        let store = Arc::new(MemoryStore::default());
+        let session = Session::new(None, store, None);
+        session.insert("oauth_state", "state_123".to_owned()).await.unwrap();
+
+        let mut req = axum::http::Request::builder()
+            .uri("/callback?code=auth_code_123") // No state query param
+            .body(())
+            .unwrap();
+        req.extensions_mut().insert(session);
+
+        let (mut parts, _) = req.into_parts();
+        
+        let res = AuthSession::from_request_parts(&mut parts, &()).await;
+        assert!(res.is_err());
+        let response = res.unwrap_err();
+        assert_eq!(response.status(), axum::http::StatusCode::BAD_REQUEST);
+    }
 }
+

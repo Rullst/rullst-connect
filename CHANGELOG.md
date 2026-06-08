@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [7.0.2] - 2026-06-08
+
+### Security
+- **Strict CSRF Enforcement**: Axum Session extractor now strictly requires the `state` parameter in callback queries, returning a `BAD_REQUEST` error if missing, eliminating the bypass vector (FINDING-01).
+- **Secure Convenience Methods**: URL-encoded the `state` and `code_challenge` parameters in default trait helper methods of `Provider` to prevent parameter injection (FINDING-02).
+- **Safety Assertions**: Promoted macros credential verification guards from `debug_assert!` to standard `assert!`, ensuring validation runs in production/release builds (FINDING-03).
+- **Apple Token Retrieval Hardening**: Required `access_token` presence in Apple provider token exchange rather than falling back to an empty string (FINDING-04).
+- **GitHub Device Flow Validation**: Enforced presence of `device_code`, `user_code`, and `verification_uri` in GitHub device authorization flow response (FINDING-05).
+- **Mock IDP Warning Documentation**: Added warnings to mock identity provider discovery and token handlers explicitly marking `alg: none` as unsafe for production (FINDING-06).
+
 ## [7.0.1] - 2026-06-06
 
 ### Security & Performance

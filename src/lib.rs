@@ -25,6 +25,5 @@ pub use user::ConnectUser;
 pub struct Socialite;
 
 impl Socialite {
-    // In the future, this will act as a factory:
-    // pub fn driver(name: &str) -> Box<dyn Provider> { ... }
+    // TODO: In the future, this will act as a factory (e.g., driver(name: &str) -> Box<dyn Provider>)
 }
