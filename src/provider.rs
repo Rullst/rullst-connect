@@ -41,7 +41,8 @@ pub trait Provider: Send + Sync {
     fn redirect_url_with_state(&self, state: &str) -> String {
         let url = self.redirect_url();
         let separator = if url.contains('?') { "&" } else { "?" };
-        format!("{url}{separator}state={state}")
+        let encoded_state = url::form_urlencoded::byte_serialize(state.as_bytes()).collect::<String>();
+        format!("{url}{separator}state={encoded_state}")
     }
 
     /// Returns the authorization URL with a PKCE `code_challenge` appended.
@@ -49,9 +50,10 @@ pub trait Provider: Send + Sync {
     fn redirect_url_with_pkce(&self, code_challenge: &str) -> String {
         let url = self.redirect_url();
         let separator = if url.contains('?') { "&" } else { "?" };
+        let encoded_challenge = url::form_urlencoded::byte_serialize(code_challenge.as_bytes()).collect::<String>();
         format!(
             "{}{}code_challenge={}&code_challenge_method=S256",
-            url, separator, code_challenge
+            url, separator, encoded_challenge
         )
     }
 
@@ -59,9 +61,11 @@ pub trait Provider: Send + Sync {
     fn redirect_url_with_pkce_and_state(&self, code_challenge: &str, state: &str) -> String {
         let url = self.redirect_url();
         let separator = if url.contains('?') { "&" } else { "?" };
+        let encoded_challenge = url::form_urlencoded::byte_serialize(code_challenge.as_bytes()).collect::<String>();
+        let encoded_state = url::form_urlencoded::byte_serialize(state.as_bytes()).collect::<String>();
         format!(
             "{}{}code_challenge={}&code_challenge_method=S256&state={}",
-            url, separator, code_challenge, state
+            url, separator, encoded_challenge, encoded_state
         )
     }
 

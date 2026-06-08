@@ -160,7 +160,9 @@ impl Provider for AppleProvider {
         let access_token = token_res["access_token"]
             .as_str()
             .map(String::from)
-            .unwrap_or_default();
+            .ok_or_else(|| {
+                crate::error::ConnectError::Token("Failed to get access_token from Apple".to_string())
+            })?;
 
         let mut user = self.get_user_from_token(id_token_str).await?;
         user.access_token = access_token;

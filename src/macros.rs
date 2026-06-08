@@ -20,9 +20,9 @@ macro_rules! define_provider {
 
         impl $name {
             pub fn new(client_id: String, client_secret: String, redirect_url: String) -> Self {
-                debug_assert!(!client_id.is_empty(), "Socialite Error: client_id cannot be empty");
-                debug_assert!(!client_secret.is_empty(), "Socialite Error: client_secret cannot be empty");
-                debug_assert!(redirect_url.starts_with("http"), "Socialite Error: redirect_url must be a valid HTTP/HTTPS URL");
+                assert!(!client_id.is_empty(), "Socialite Error: client_id cannot be empty");
+                assert!(!client_secret.is_empty(), "Socialite Error: client_secret cannot be empty");
+                assert!(redirect_url.starts_with("http"), "Socialite Error: redirect_url must be a valid HTTP/HTTPS URL");
 
                 static CLIENT: ::std::sync::LazyLock<::std::sync::Arc<dyn $crate::client::HttpClient>> =
                     ::std::sync::LazyLock::new(|| ::std::sync::Arc::new($crate::client::ReqwestClient::new()));

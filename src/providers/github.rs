@@ -140,19 +140,29 @@ impl Provider for GithubProvider {
             .json::<Value>()
             .await?;
 
+        let device_code = res["device_code"]
+            .as_str()
+            .map(String::from)
+            .ok_or_else(|| {
+                crate::error::ConnectError::Provider("Missing device_code from Github response".to_string())
+            })?;
+        let user_code = res["user_code"]
+            .as_str()
+            .map(String::from)
+            .ok_or_else(|| {
+                crate::error::ConnectError::Provider("Missing user_code from Github response".to_string())
+            })?;
+        let verification_uri = res["verification_uri"]
+            .as_str()
+            .map(String::from)
+            .ok_or_else(|| {
+                crate::error::ConnectError::Provider("Missing verification_uri from Github response".to_string())
+            })?;
+
         Ok(crate::user::DeviceAuthorizationResponse {
-            device_code: res["device_code"]
-                .as_str()
-                .map(String::from)
-                .unwrap_or_default(),
-            user_code: res["user_code"]
-                .as_str()
-                .map(String::from)
-                .unwrap_or_default(),
-            verification_uri: res["verification_uri"]
-                .as_str()
-                .map(String::from)
-                .unwrap_or_default(),
+            device_code,
+            user_code,
+            verification_uri,
             verification_uri_complete: res["verification_uri_complete"]
                 .as_str()
                 .map(String::from),

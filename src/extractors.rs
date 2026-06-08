@@ -107,23 +107,26 @@ where
                 .await
                 .map_err(axum::response::IntoResponse::into_response)?;
 
-        if let Some(state_param) = &callback.state {
-            let session_state: Option<String> = session.get("oauth_state").await.unwrap_or(None);
-            if let Some(saved) = session_state
-                && state_param == &saved
-            {
-                // Valid! Remove it so it can't be reused
-                let _ = session.remove::<String>("oauth_state").await;
-                return Ok(Self { callback });
-            }
+        let state_param = callback.state.as_ref().ok_or_else(|| {
+            axum::response::IntoResponse::into_response((
+                axum::http::StatusCode::BAD_REQUEST,
+                "Missing CSRF state parameter",
+            ))
+        })?;
 
-            return Err(axum::response::IntoResponse::into_response((
+        let session_state: Option<String> = session.get("oauth_state").await.unwrap_or(None);
+        if let Some(saved) = session_state
+            && state_param == &saved
+        {
+            // Valid! Remove it so it can't be reused
+            let _ = session.remove::<String>("oauth_state").await;
+            Ok(Self { callback })
+        } else {
+            Err(axum::response::IntoResponse::into_response((
                 axum::http::StatusCode::BAD_REQUEST,
                 "CSRF state mismatch",
-            )));
+            )))
         }
-
-        Ok(Self { callback })
     }
 }
 
@@ -304,6 +307,31 @@ mod tests {
         assert!(res.is_err());
         let response = res.unwrap_err();
         assert_eq!(response.status(), axum::http::StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    #[cfg(feature = "axum-session")]
+    #[tokio::test]
+    async fn test_axum_session_extractor_missing_state() {
+        use axum::extract::FromRequestParts;
+        use tower_sessions::{MemoryStore, Session};
+        use std::sync::Arc;
+
+        let store = Arc::new(MemoryStore::default());
+        let session = Session::new(None, store, None);
+        session.insert("oauth_state", "state_123".to_owned()).await.unwrap();
+
+        let mut req = axum::http::Request::builder()
+            .uri("/callback?code=auth_code_123") // No state query param
+            .body(())
+            .unwrap();
+        req.extensions_mut().insert(session);
+
+        let (mut parts, _) = req.into_parts();
+        
+        let res = AuthSession::from_request_parts(&mut parts, &()).await;
+        assert!(res.is_err());
+        let response = res.unwrap_err();
+        assert_eq!(response.status(), axum::http::StatusCode::BAD_REQUEST);
     }
 }
 
