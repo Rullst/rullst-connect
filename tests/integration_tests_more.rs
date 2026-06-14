@@ -88,7 +88,9 @@ async fn test_discord_get_user_success() {
     assert_eq!(user.email.as_deref(), Some("wumpus@discord.com"));
     assert_eq!(
         user.avatar_url.as_deref(),
-        Some("https://cdn.discordapp.com/avatars/123456789012345678/a_mock_avatar_hash.png?size=1024")
+        Some(
+            "https://cdn.discordapp.com/avatars/123456789012345678/a_mock_avatar_hash.png?size=1024"
+        )
     );
     assert_eq!(user.access_token, "mock_discord_access_token");
     assert_eq!(user.expires_in, Some(604800));
@@ -145,7 +147,12 @@ async fn test_twitch_get_user_success() {
     assert_eq!(user.id, "141981764");
     assert_eq!(user.name, "TwitchDev");
     assert_eq!(user.email.as_deref(), Some("not-real@email.com"));
-    assert_eq!(user.avatar_url.as_deref(), Some("https://static-cdn.jtvnw.net/jtv_user_pictures/8a6381c7-d0c0-4576-b179-38bd5ce1d6af-profile_image-300x300.png"));
+    assert_eq!(
+        user.avatar_url.as_deref(),
+        Some(
+            "https://static-cdn.jtvnw.net/jtv_user_pictures/8a6381c7-d0c0-4576-b179-38bd5ce1d6af-profile_image-300x300.png"
+        )
+    );
     assert_eq!(user.access_token, "mock_twitch_token");
     assert_eq!(user.refresh_token.as_deref(), Some("mock_twitch_refresh"));
     assert_eq!(user.expires_in, Some(14400));
