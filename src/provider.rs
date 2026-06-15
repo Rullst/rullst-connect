@@ -250,6 +250,7 @@ pub async fn fetch_refresh_token(
 }
 
 /// Helper to exchange an authorization code and build the ConnectUser profile.
+#[allow(clippy::too_many_arguments)]
 pub async fn exchange_and_get_user<P>(
     provider: &P,
     client: &dyn crate::client::HttpClient,

@@ -17,6 +17,7 @@ rullst = ["axum"]
 retry = ["dep:reqwest-middleware", "dep:reqwest-retry"]
 reqwest-middleware = ["dep:reqwest-middleware"]
 axum-session = ["axum", "dep:tower-sessions"]
+mock = []
 
 [dependencies]
 async-trait = "0.1"
