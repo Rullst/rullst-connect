@@ -9,17 +9,7 @@ crate::define_provider!(XProvider, "users.read", "tweet.read");
 
 #[async_trait]
 impl Provider for XProvider {
-    fn redirect_url(&self) -> String {
-        let mut params = crate::provider::build_oauth_params(
-            &self.client_id,
-            &self.redirect_url,
-            &self.scopes,
-            self.state.as_deref(),
-            self.pkce_challenge.as_deref(),
-        );
-        params.append_pair("response_type", "code");
-        format!("https://twitter.com/i/oauth2/authorize?{}", params.finish())
-    }
+    crate::impl_standard_redirect_url!("https://twitter.com/i/oauth2/authorize");
 
     async fn get_user(&self, _auth_code: &str) -> Result<ConnectUser, ConnectError> {
         let _ = &self.client_secret;
@@ -36,7 +26,7 @@ impl Provider for XProvider {
         let token_res = self
             .http_client
             .post(self.token_url())
-            .form(&[
+            .form([
                 ("grant_type", "authorization_code"),
                 ("client_id", self.client_id.as_str()),
                 ("code", auth_code),
@@ -96,22 +86,5 @@ impl Provider for XProvider {
         "https://api.twitter.com/2/oauth2/token".to_string()
     }
 
-    async fn refresh_token(
-        &self,
-        refresh_token: &str,
-    ) -> Result<crate::user::ConnectUser, crate::error::ConnectError> {
-        let token = crate::provider::fetch_refresh_token(
-            self.http_client.as_ref(),
-            &self.token_url(),
-            &self.client_id,
-            &self.client_secret,
-            refresh_token,
-        )
-        .await?;
-
-        let mut user = self.get_user_from_token(&token.access_token).await?;
-        user.refresh_token = token.refresh_token;
-        user.expires_in = token.expires_in;
-        Ok(user)
-    }
+    crate::impl_standard_refresh_token!();
 }

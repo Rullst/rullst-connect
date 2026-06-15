@@ -82,10 +82,8 @@ pub trait Provider: Send + Sync {
     async fn get_user_with_pkce(
         &self,
         auth_code: &str,
-        _code_verifier: &str,
-    ) -> Result<ConnectUser, crate::error::ConnectError> {
-        self.get_user(auth_code).await
-    }
+        code_verifier: &str,
+    ) -> Result<ConnectUser, crate::error::ConnectError>;
 
     /// Fetches the user's profile using an existing access token.
     /// This bypasses the authorization code exchange step.
@@ -153,16 +151,22 @@ pub async fn fetch_access_token(
     client_secret: &str,
     code: &str,
     redirect_url: &str,
+    code_verifier: Option<&str>,
 ) -> Result<Oauth2TokenResponse, crate::error::ConnectError> {
+    let mut form = vec![
+        ("grant_type", "authorization_code"),
+        ("client_id", client_id),
+        ("client_secret", client_secret),
+        ("code", code),
+        ("redirect_uri", redirect_url),
+    ];
+    if let Some(verifier) = code_verifier {
+        form.push(("code_verifier", verifier));
+    }
+
     let token_res = client
         .post(token_url)
-        .form(&[
-            ("grant_type", "authorization_code"),
-            ("client_id", client_id),
-            ("client_secret", client_secret),
-            ("code", code),
-            ("redirect_uri", redirect_url),
-        ])
+        .form(form)
         .send()
         .await?
         .error_for_status()?
@@ -204,7 +208,7 @@ pub async fn fetch_refresh_token(
 ) -> Result<Oauth2TokenResponse, crate::error::ConnectError> {
     let token_res = client
         .post(token_url)
-        .form(&[
+        .form([
             ("client_id", client_id),
             ("client_secret", client_secret),
             ("refresh_token", refresh_token),
@@ -254,6 +258,7 @@ pub async fn exchange_and_get_user<P>(
     client_secret: &str,
     auth_code: &str,
     redirect_url: &str,
+    code_verifier: Option<&str>,
 ) -> Result<ConnectUser, crate::error::ConnectError>
 where
     P: Provider + ?Sized,
@@ -265,6 +270,7 @@ where
         client_secret,
         auth_code,
         redirect_url,
+        code_verifier,
     )
     .await?;
 
@@ -308,6 +314,13 @@ mod tests {
 
     #[async_trait]
     impl Provider for DummyProvider {
+        async fn get_user_with_pkce(
+            &self,
+            auth_code: &str,
+            _code_verifier: &str,
+        ) -> Result<ConnectUser, crate::error::ConnectError> {
+            self.get_user(auth_code).await
+        }
         fn redirect_url(&self) -> String {
             self.base_url.clone()
         }

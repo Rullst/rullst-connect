@@ -29,8 +29,9 @@ pub struct AuthCallback {
 impl AuthCallback {
     /// Helper to verify the CSRF state parameter.
     pub fn verify_state(&self, session_state: &str) -> Result<(), crate::error::ConnectError> {
+        use subtle::ConstantTimeEq;
         match &self.state {
-            Some(state) if state == session_state => Ok(()),
+            Some(state) if bool::from(state.as_bytes().ct_eq(session_state.as_bytes())) => Ok(()),
             Some(_) => Err(crate::error::ConnectError::InvalidState(
                 "CSRF state mismatch".into(),
             )),
@@ -114,9 +115,10 @@ where
             ))
         })?;
 
+        use subtle::ConstantTimeEq;
         let session_state: Option<String> = session.get("oauth_state").await.unwrap_or(None);
         if let Some(saved) = session_state
-            && state_param == &saved
+            && bool::from(state_param.as_bytes().ct_eq(saved.as_bytes()))
         {
             // Valid! Remove it so it can't be reused
             let _ = session.remove::<String>("oauth_state").await;

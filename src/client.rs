@@ -73,8 +73,12 @@ impl<'a> RequestBuilder<'a> {
         self
     }
 
-    pub fn basic_auth(mut self, username: &str, password: Option<&str>) -> Self {
-        self.req.basic_auth = Some((username.to_owned(), password.map(String::from)));
+    pub fn basic_auth(
+        mut self,
+        username: impl Into<String>,
+        password: Option<impl Into<String>>,
+    ) -> Self {
+        self.req.basic_auth = Some((username.into(), password.map(Into::into)));
         self
     }
 
@@ -83,16 +87,17 @@ impl<'a> RequestBuilder<'a> {
         self
     }
 
-    pub fn form<K, V>(mut self, form: &[(K, V)]) -> Self
+    pub fn form<I, K, V>(mut self, form: I) -> Self
     where
-        K: AsRef<str>,
-        V: AsRef<str>,
+        I: IntoIterator<Item = (K, V)>,
+        K: Into<String>,
+        V: Into<String>,
     {
-        self.req.form.reserve(form.len());
-        for (k, v) in form {
-            self.req
-                .form
-                .push((k.as_ref().to_string(), v.as_ref().to_string()));
+        let iter = form.into_iter();
+        let (lower, _) = iter.size_hint();
+        self.req.form.reserve(lower);
+        for (k, v) in iter {
+            self.req.form.push((k.into(), v.into()));
         }
         self
     }
@@ -219,8 +224,17 @@ impl HttpClient for ReqwestClient {
         let mut res = {
             let mut builder = self.client.request(method, &req.url);
 
-            for (k, v) in &req.headers {
-                builder = builder.header(k, v);
+            if !req.headers.is_empty() {
+                let mut headers = reqwest::header::HeaderMap::with_capacity(req.headers.len());
+                for (k, v) in &req.headers {
+                    if let (Ok(name), Ok(value)) = (
+                        reqwest::header::HeaderName::from_bytes(k.as_bytes()),
+                        reqwest::header::HeaderValue::from_str(v),
+                    ) {
+                        headers.insert(name, value);
+                    }
+                }
+                builder = builder.headers(headers);
             }
 
             if let Some(token) = &req.bearer_auth {
@@ -247,8 +261,17 @@ impl HttpClient for ReqwestClient {
         let mut res = {
             let mut builder = self.client.request(method, &req.url);
 
-            for (k, v) in &req.headers {
-                builder = builder.header(k, v);
+            if !req.headers.is_empty() {
+                let mut headers = reqwest::header::HeaderMap::with_capacity(req.headers.len());
+                for (k, v) in &req.headers {
+                    if let (Ok(name), Ok(value)) = (
+                        reqwest::header::HeaderName::from_bytes(k.as_bytes()),
+                        reqwest::header::HeaderValue::from_str(v),
+                    ) {
+                        headers.insert(name, value);
+                    }
+                }
+                builder = builder.headers(headers);
             }
 
             if let Some(token) = &req.bearer_auth {
@@ -351,7 +374,7 @@ mod tests {
         .bearer_auth("my_token")
         .basic_auth("username", Some("password"))
         .json(json!({"hello": "world"}))
-        .form(&[("param1", "val1"), ("param2", "val2")]);
+        .form([("param1", "val1"), ("param2", "val2")]);
 
         let wrapper = builder.send().await.expect("Failed to send request");
         let res_json: serde_json::Value =

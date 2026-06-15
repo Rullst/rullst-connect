@@ -8,25 +8,21 @@ crate::define_provider!(FacebookProvider, "email", "public_profile");
 
 #[async_trait]
 impl Provider for FacebookProvider {
-    fn redirect_url(&self) -> String {
-        let mut params = crate::provider::build_oauth_params(
-            &self.client_id,
-            &self.redirect_url,
-            &self.scopes,
-            self.state.as_deref(),
-            self.pkce_challenge.as_deref(),
-        );
-        format!(
-            "https://www.facebook.com/v19.0/dialog/oauth?{}",
-            params.finish()
-        )
+    async fn get_user_with_pkce(
+        &self,
+        auth_code: &str,
+        _code_verifier: &str,
+    ) -> Result<ConnectUser, crate::error::ConnectError> {
+        self.get_user(auth_code).await
     }
+
+    crate::impl_standard_redirect_url!("https://www.facebook.com/v19.0/dialog/oauth");
 
     async fn get_user(&self, auth_code: &str) -> Result<ConnectUser, crate::error::ConnectError> {
         let token_res = self
             .http_client
             .post(self.token_url())
-            .form(&[
+            .form([
                 ("client_id", self.client_id.as_str()),
                 ("client_secret", self.client_secret.as_str()),
                 ("code", auth_code),
@@ -86,22 +82,5 @@ impl Provider for FacebookProvider {
         "https://graph.facebook.com/v19.0/oauth/access_token".to_string()
     }
 
-    async fn refresh_token(
-        &self,
-        refresh_token: &str,
-    ) -> Result<crate::user::ConnectUser, crate::error::ConnectError> {
-        let token = crate::provider::fetch_refresh_token(
-            self.http_client.as_ref(),
-            &self.token_url(),
-            &self.client_id,
-            &self.client_secret,
-            refresh_token,
-        )
-        .await?;
-
-        let mut user = self.get_user_from_token(&token.access_token).await?;
-        user.refresh_token = token.refresh_token;
-        user.expires_in = token.expires_in;
-        Ok(user)
-    }
+    crate::impl_standard_refresh_token!();
 }

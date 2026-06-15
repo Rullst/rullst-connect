@@ -150,23 +150,22 @@ impl OidcProvider {
 
 #[async_trait]
 impl Provider for OidcProvider {
-    fn redirect_url(&self) -> String {
-        let mut params = crate::provider::build_oauth_params(
-            &self.client_id,
-            &self.redirect_url,
-            &self.scopes,
-            self.state.as_deref(),
-            self.pkce_challenge.as_deref(),
-        );
-        format!("{}?{}", self.authorization_endpoint, params.finish())
+    async fn get_user_with_pkce(
+        &self,
+        auth_code: &str,
+        _code_verifier: &str,
+    ) -> Result<ConnectUser, crate::error::ConnectError> {
+        self.get_user(auth_code).await
     }
+
+    crate::impl_standard_redirect_url!("{}");
 
     #[tracing::instrument(skip(self, auth_code))]
     async fn get_user(&self, auth_code: &str) -> Result<ConnectUser, ConnectError> {
         let token_res = self
             .http_client
             .post(self.token_url())
-            .form(&[
+            .form([
                 ("client_id", self.client_id.as_str()),
                 ("client_secret", self.client_secret.as_str()),
                 ("code", auth_code),

@@ -2532,12 +2532,13 @@ dependencies = [
 
 [[package]]
 name = "rullst-connect"
-version = "7.0.2"
+version = "8.0.0"
 dependencies = [
  "actix-web",
  "async-trait",
  "axum",
  "base64",
+ "itoa",
  "jsonwebtoken",
  "leptos_router",
  "rand 0.10.1",
@@ -2548,6 +2549,7 @@ dependencies = [
  "serde_json",
  "serde_urlencoded",
  "sha2 0.11.0",
+ "subtle",
  "thiserror 2.0.18",
  "tokio",
  "tower-sessions",

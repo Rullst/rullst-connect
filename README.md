@@ -30,41 +30,19 @@
 
 ## 📦 Supported Providers
 
-Official support for 33 major providers:
+Official support for 11 core providers:
 
 1. **Google**
 2. **GitHub**
-3. **X (Twitter)** (with PKCE support)
+3. **Microsoft / Azure AD**
 4. **Apple** (Sign in with Apple)
-5. **Microsoft / Azure AD**
+5. **Auth0**
 6. **AWS Cognito**
-7. **Auth0**
-8. **Okta**
-9. **Facebook**
+7. **Facebook**
+8. **X (Twitter)** (Strict PKCE requirement)
+9. **Discord**
 10. **LinkedIn**
-11. **Discord**
-12. **Spotify**
-13. **Twitch**
-14. **GitLab**
-15. **Bitbucket**
-16. **Slack**
-17. **Patreon**
-18. **Zoom**
-19. **Reddit**
-20. **Dropbox**
-21. **Notion**
-22. **Stripe**
-23. **DigitalOcean**
-24. **TikTok**
-25. **Pinterest**
-26. **Snapchat**
-27. **Instagram**
-28. **Line**
-29. **VK (VKontakte)**
-30. **Yahoo**
-31. **Basecamp**
-32. **Linear**
-33. **Asana**
+11. **OIDC (OpenID Connect Custom Provider)**
 
 ## 🛠️ Installation
 
@@ -78,7 +56,7 @@ cargo add rullst-connect
 Or manually add it to your `Cargo.toml`:
 ```toml
 [dependencies]
-rullst-connect = "7.0.2"
+rullst-connect = "8.0.0"
 tokio = { version = "1.52", features = ["full"] }
 ```
 
@@ -145,9 +123,9 @@ let refreshed_user = github.refresh_token("existing_refresh_token_string").await
 println!("New Access Token: {}", refreshed_user.access_token);
 ```
 
-### 🔒 PKCE Support (e.g. X / Twitter)
+### 🔒 PKCE Support (v8.0.0+)
 
-Some providers like **X (Twitter) v2** strictly require PKCE (Proof Key for Code Exchange). We provide a built-in helper for this.
+All providers natively support PKCE (Proof Key for Code Exchange) to mitigate authorization code interception attacks. Some providers like **X (Twitter) v2** strictly require it.
 
 ```rust
 use rullst_connect::pkce::generate_pkce;

@@ -99,26 +99,22 @@ impl GoogleProvider {
 
 #[async_trait]
 impl Provider for GoogleProvider {
-    fn redirect_url(&self) -> String {
-        let mut params = crate::provider::build_oauth_params(
-            &self.client_id,
-            &self.redirect_url,
-            &self.scopes,
-            self.state.as_deref(),
-            self.pkce_challenge.as_deref(),
-        );
-        format!(
-            "https://accounts.google.com/o/oauth2/v2/auth?{}",
-            params.finish()
-        )
+    async fn get_user_with_pkce(
+        &self,
+        auth_code: &str,
+        _code_verifier: &str,
+    ) -> Result<ConnectUser, crate::error::ConnectError> {
+        self.get_user(auth_code).await
     }
+
+    crate::impl_standard_redirect_url!("https://accounts.google.com/o/oauth2/v2/auth");
 
     async fn get_user(&self, auth_code: &str) -> Result<ConnectUser, crate::error::ConnectError> {
         // Exchange code for token
         let token_res = self
             .http_client
             .post(self.token_url())
-            .form(&[
+            .form([
                 ("client_id", self.client_id.as_str()),
                 ("client_secret", self.client_secret.as_str()),
                 ("code", auth_code),
@@ -246,7 +242,7 @@ impl Provider for GoogleProvider {
     async fn revoke_token(&self, token: &str) -> Result<(), crate::error::ConnectError> {
         self.http_client
             .post("https://oauth2.googleapis.com/revoke")
-            .form(&[("token", token)])
+            .form([("token", token)])
             .send()
             .await?
             .error_for_status()?;
@@ -257,24 +253,7 @@ impl Provider for GoogleProvider {
         "https://oauth2.googleapis.com/token".to_string()
     }
 
-    async fn refresh_token(
-        &self,
-        refresh_token: &str,
-    ) -> Result<ConnectUser, crate::error::ConnectError> {
-        let token = crate::provider::fetch_refresh_token(
-            self.http_client.as_ref(),
-            &self.token_url(),
-            &self.client_id,
-            &self.client_secret,
-            refresh_token,
-        )
-        .await?;
-
-        let mut user = self.get_user_from_token(&token.access_token).await?;
-        user.refresh_token = token.refresh_token;
-        user.expires_in = token.expires_in;
-        Ok(user)
-    }
+    crate::impl_standard_refresh_token!();
 }
 
 #[cfg(test)]

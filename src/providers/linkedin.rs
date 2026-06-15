@@ -8,20 +8,15 @@ crate::define_provider!(LinkedinProvider, "profile", "email", "openid");
 
 #[async_trait]
 impl Provider for LinkedinProvider {
-    fn redirect_url(&self) -> String {
-        let mut params = crate::provider::build_oauth_params(
-            &self.client_id,
-            &self.redirect_url,
-            &self.scopes,
-            self.state.as_deref(),
-            self.pkce_challenge.as_deref(),
-        );
-        params.append_pair("response_type", "code");
-        format!(
-            "https://www.linkedin.com/oauth/v2/authorization?{}",
-            params.finish()
-        )
+    async fn get_user_with_pkce(
+        &self,
+        auth_code: &str,
+        _code_verifier: &str,
+    ) -> Result<ConnectUser, crate::error::ConnectError> {
+        self.get_user(auth_code).await
     }
+
+    crate::impl_standard_redirect_url!("https://www.linkedin.com/oauth/v2/authorization");
 
     async fn get_user(
         &self,
@@ -34,6 +29,7 @@ impl Provider for LinkedinProvider {
             &self.client_secret,
             auth_code,
             &self.redirect_url,
+            None,
         )
         .await?;
 
@@ -79,22 +75,5 @@ impl Provider for LinkedinProvider {
         "https://www.linkedin.com/oauth/v2/accessToken".to_string()
     }
 
-    async fn refresh_token(
-        &self,
-        refresh_token: &str,
-    ) -> Result<crate::user::ConnectUser, crate::error::ConnectError> {
-        let token = crate::provider::fetch_refresh_token(
-            self.http_client.as_ref(),
-            &self.token_url(),
-            &self.client_id,
-            &self.client_secret,
-            refresh_token,
-        )
-        .await?;
-
-        let mut user = self.get_user_from_token(&token.access_token).await?;
-        user.refresh_token = token.refresh_token;
-        user.expires_in = token.expires_in;
-        Ok(user)
-    }
+    crate::impl_standard_refresh_token!();
 }

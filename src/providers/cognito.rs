@@ -72,6 +72,14 @@ impl CognitoProvider {
 
 #[async_trait]
 impl Provider for CognitoProvider {
+    async fn get_user_with_pkce(
+        &self,
+        auth_code: &str,
+        _code_verifier: &str,
+    ) -> Result<ConnectUser, crate::error::ConnectError> {
+        self.get_user(auth_code).await
+    }
+
     fn redirect_url(&self) -> String {
         let mut params = crate::provider::build_oauth_params(
             &self.client_id,
@@ -94,6 +102,7 @@ impl Provider for CognitoProvider {
             &self.client_secret,
             auth_code,
             &self.redirect_url,
+            None,
         )
         .await?;
 

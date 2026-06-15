@@ -29,6 +29,13 @@ impl MockProvider {
 
 #[async_trait]
 impl Provider for MockProvider {
+    async fn get_user_with_pkce(
+        &self,
+        auth_code: &str,
+        _code_verifier: &str,
+    ) -> Result<ConnectUser, crate::error::ConnectError> {
+        self.get_user(auth_code).await
+    }
     fn redirect_url(&self) -> String {
         self.mocked_url.clone()
     }

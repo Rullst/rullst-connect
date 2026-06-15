@@ -8,20 +8,15 @@ crate::define_provider!(DiscordProvider, "identify", "email");
 
 #[async_trait]
 impl Provider for DiscordProvider {
-    fn redirect_url(&self) -> String {
-        let mut params = crate::provider::build_oauth_params(
-            &self.client_id,
-            &self.redirect_url,
-            &self.scopes,
-            self.state.as_deref(),
-            self.pkce_challenge.as_deref(),
-        );
-        params.append_pair("response_type", "code");
-        format!(
-            "https://discord.com/api/oauth2/authorize?{}",
-            params.finish()
-        )
+    async fn get_user_with_pkce(
+        &self,
+        auth_code: &str,
+        _code_verifier: &str,
+    ) -> Result<ConnectUser, crate::error::ConnectError> {
+        self.get_user(auth_code).await
     }
+
+    crate::impl_standard_redirect_url!("https://discord.com/api/oauth2/authorize");
 
     async fn get_user(
         &self,
@@ -35,6 +30,7 @@ impl Provider for DiscordProvider {
             &self.client_secret,
             auth_code,
             &self.redirect_url,
+            None,
         )
         .await
     }

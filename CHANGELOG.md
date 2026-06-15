@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [8.0.0] - 2026-06-15
+
+### Changed (Breaking)
+- **Pruning**: Removed 25 low-usage/unmaintained providers to focus the library completely on the 11 most robust, heavily-used core providers: Google, GitHub, Microsoft, Apple, Auth0, Cognito, Facebook, X, Discord, LinkedIn, and OIDC.
+- **Security (PKCE)**: Upgraded the `Provider` trait to uniformly require PKCE natively on all providers. Implemented `get_user_with_pkce` enforcing authorization code interception attack mitigations.
+- **Architecture**: Renamed the primary entry point `Socialite` to `Connect`.
+- **API Optimization**: Changed `RequestBuilder::form` to accept `IntoIterator` to avoid unnecessary memory allocations. If you were passing slices via `.form(&[...])`, you must now pass arrays or vectors directly `.form([...])`.
+
+### Changed
+- **Security**: Replaced `debug_assert!` with `assert!` in Google provider to ensure configuration verification runs in release builds.
+- **Security**: Upgraded CSRF `state` parameter validation in `AuthCallback` and `AuthSession` to use constant-time comparison via the `subtle` crate, mitigating timing attacks.
+- **Internal**: Removed unused `dead_code` macro allowance in `macros.rs` test module.
+- **Testing**: Added tests covering `ResponseWrapper::json` deserialization error paths.
+- **Testing**: Added missing tests for default trait methods in `HttpClientExt` (`get` and `post`).
+
+### Added
+- **Architecture**: Renamed `Socialite` to `Connect` and implemented `Connect::driver`, a dynamic provider factory method allowing initialization of standard OAuth providers by name via string matching.
+- **DRY Refactoring**: Introduced `impl_standard_redirect_url!` and `impl_standard_refresh_token!` helper macros, eliminating hundreds of lines of duplicate boilerplate across 30+ providers without introducing breaking changes to the `Provider` trait interface.
+- **Testing**: Added unit tests for `fetch_refresh_token` error flows and the `exchange_and_get_user` integration helper.
+
+### Added
+- **Architecture**: Implemented `Socialite::driver`, a dynamic provider factory method allowing initialization of standard OAuth providers by name via string matching.
+- **DRY Refactoring**: Introduced `impl_standard_redirect_url!` and `impl_standard_refresh_token!` helper macros, eliminating hundreds of lines of duplicate boilerplate across 30+ providers without introducing breaking changes to the `Provider` trait interface.
+- **Testing**: Added unit tests for `fetch_refresh_token` error flows and the `exchange_and_get_user` integration helper.
+
 ## [7.0.2] - 2026-06-08
 
 ### Security

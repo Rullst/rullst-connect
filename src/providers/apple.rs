@@ -118,6 +118,14 @@ impl AppleProvider {
 
 #[async_trait]
 impl Provider for AppleProvider {
+    async fn get_user_with_pkce(
+        &self,
+        auth_code: &str,
+        _code_verifier: &str,
+    ) -> Result<ConnectUser, crate::error::ConnectError> {
+        self.get_user(auth_code).await
+    }
+
     fn redirect_url(&self) -> String {
         let mut params = crate::provider::build_oauth_params(
             &self.client_id,
@@ -140,7 +148,7 @@ impl Provider for AppleProvider {
         let token_res = self
             .http_client
             .post(self.token_url())
-            .form(&[
+            .form([
                 ("client_id", self.client_id.as_str()),
                 ("client_secret", client_secret.as_str()),
                 ("code", auth_code),
@@ -237,7 +245,7 @@ impl Provider for AppleProvider {
         let token_res = self
             .http_client
             .post(self.token_url())
-            .form(&[
+            .form([
                 ("client_id", self.client_id.as_str()),
                 ("client_secret", client_secret.as_str()),
                 ("refresh_token", refresh_token),

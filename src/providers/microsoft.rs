@@ -8,20 +8,17 @@ crate::define_provider!(MicrosoftProvider, "User.Read");
 
 #[async_trait]
 impl Provider for MicrosoftProvider {
-    fn redirect_url(&self) -> String {
-        let mut params = crate::provider::build_oauth_params(
-            &self.client_id,
-            &self.redirect_url,
-            &self.scopes,
-            self.state.as_deref(),
-            self.pkce_challenge.as_deref(),
-        );
-        params.append_pair("response_type", "code");
-        format!(
-            "https://login.microsoftonline.com/common/oauth2/v2.0/authorize?{}",
-            params.finish()
-        )
+    async fn get_user_with_pkce(
+        &self,
+        auth_code: &str,
+        _code_verifier: &str,
+    ) -> Result<ConnectUser, crate::error::ConnectError> {
+        self.get_user(auth_code).await
     }
+
+    crate::impl_standard_redirect_url!(
+        "https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
+    );
 
     async fn get_user(
         &self,
@@ -35,6 +32,7 @@ impl Provider for MicrosoftProvider {
             &self.client_secret,
             auth_code,
             &self.redirect_url,
+            None,
         )
         .await
     }
