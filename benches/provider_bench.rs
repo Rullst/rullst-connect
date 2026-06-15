@@ -7,7 +7,7 @@ fn main() {
         let _provider = GithubProvider::new(
             "client_id".to_string(),
             "client_secret".to_string(),
-            "redirect_url".to_string(),
+            "http://redirect_url".to_string(),
         );
     }
     println!("Elapsed creating 100 providers: {:?}", start.elapsed());
