@@ -5,10 +5,9 @@ use async_trait::async_trait;
 use serde_json::Value;
 use tokio::sync::OnceCell;
 
-
 pub struct GoogleProvider {
     pub(crate) client_id: String,
-    pub(crate) client_secret: String,
+    pub(crate) client_secret: secrecy::SecretString,
     pub(crate) redirect_url: String,
     pub(crate) http_client: ::std::sync::Arc<dyn crate::client::HttpClient>,
     pub(crate) scopes: String,
@@ -26,16 +25,20 @@ struct GoogleTokenResponse {
 }
 
 impl GoogleProvider {
-    pub fn new(client_id: String, client_secret: String, redirect_url: String) -> Self {
-        debug_assert!(
+    pub fn new(
+        client_id: String,
+        client_secret: secrecy::SecretString,
+        redirect_url: String,
+    ) -> Self {
+        assert!(
             !client_id.is_empty(),
             "Socialite Error: client_id cannot be empty"
         );
-        debug_assert!(
-            !client_secret.is_empty(),
+        assert!(
+            !secrecy::ExposeSecret::expose_secret(&client_secret).is_empty(),
             "Socialite Error: client_secret cannot be empty"
         );
-        debug_assert!(
+        assert!(
             redirect_url.starts_with("http"),
             "Socialite Error: redirect_url must be a valid HTTP/HTTPS URL"
         );
@@ -169,7 +172,9 @@ impl GoogleProvider {
                 if let Some(nonce) = expected_nonce {
                     let token_nonce = p["nonce"].as_str().unwrap_or("");
                     use subtle::ConstantTimeEq;
-                    if !bool::from(token_nonce.as_bytes().ct_eq(nonce.as_bytes())) {
+                    if token_nonce.len() != nonce.len()
+                        || !bool::from(token_nonce.as_bytes().ct_eq(nonce.as_bytes()))
+                    {
                         return Err(crate::error::ConnectError::Provider(
                             "Google id_token nonce mismatch".to_owned(),
                         ));
@@ -189,7 +194,7 @@ impl GoogleProvider {
                         .map(|s: &str| s.replace("=s96-c", "=s400-c")),
                     email_verified: p["email_verified"].as_bool(),
                     raw_data: p,
-                    access_token,
+                    access_token: access_token.into(),
                     refresh_token: None,
                     expires_in: None,
                 }
@@ -202,7 +207,7 @@ impl GoogleProvider {
             self.get_user_from_token(&access_token).await?
         };
 
-        user.refresh_token = token_res.refresh_token;
+        user.refresh_token = token_res.refresh_token.map(secrecy::SecretString::from);
         user.expires_in = token_res.expires_in;
         Ok(user)
     }
@@ -218,7 +223,7 @@ impl Provider for GoogleProvider {
     ) -> Result<ConnectUser, crate::error::ConnectError> {
         let form_data = crate::provider::TokenExchangeForm {
             client_id: self.client_id.as_str(),
-            client_secret: Some(self.client_secret.as_str()),
+            client_secret: Some(secrecy::ExposeSecret::expose_secret(&self.client_secret)),
             code: params.auth_code,
             grant_type: Some("authorization_code"),
             redirect_uri: self.redirect_url.as_str(),
@@ -257,7 +262,7 @@ impl Provider for GoogleProvider {
                 .map(|s: &str| s.replace("=s96-c", "=s400-c")),
             email_verified: user_res["email_verified"].as_bool(),
             raw_data: user_res,
-            access_token: access_token.to_owned(),
+            access_token: secrecy::SecretString::from(access_token.to_owned()),
             refresh_token: None,
             expires_in: None,
         })
@@ -289,7 +294,7 @@ mod tests {
     fn test_google_redirect_url() {
         let provider = GoogleProvider::new(
             "client_id".to_string(),
-            "client_secret".to_string(),
+            secrecy::SecretString::from("client_secret".to_string()),
             "https://redirect.url".to_string(),
         );
 

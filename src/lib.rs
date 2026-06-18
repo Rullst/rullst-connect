@@ -35,7 +35,7 @@ impl Connect {
     pub fn driver(
         name: &str,
         client_id: String,
-        client_secret: String,
+        client_secret: secrecy::SecretString,
         redirect_url: String,
     ) -> Result<Box<dyn Provider>, crate::error::ConnectError> {
         let name = name.to_lowercase();
@@ -101,7 +101,7 @@ mod tests {
         let github = Connect::driver(
             "github",
             "id".to_string(),
-            "secret".to_string(),
+            secrecy::SecretString::from("secret".to_string()),
             "http://url".to_string(),
         );
         assert!(github.is_ok());
@@ -109,7 +109,7 @@ mod tests {
         let apple = Connect::driver(
             "apple",
             "id".to_string(),
-            "secret".to_string(),
+            secrecy::SecretString::from("secret".to_string()),
             "http://url".to_string(),
         );
         assert!(apple.is_err());
@@ -117,7 +117,7 @@ mod tests {
         let unknown = Connect::driver(
             "unknown",
             "id".to_string(),
-            "secret".to_string(),
+            secrecy::SecretString::from("secret".to_string()),
             "http://url".to_string(),
         );
         assert!(unknown.is_err());

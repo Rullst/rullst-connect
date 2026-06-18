@@ -6,7 +6,7 @@ use serde_json::Value;
 pub struct HttpRequest {
     pub method: String,
     pub url: String,
-    pub headers: Vec<(String, String)>,
+    pub headers: reqwest::header::HeaderMap,
     pub form: Option<String>,
     pub json: Option<Value>,
     pub basic_auth: Option<(String, Option<String>)>,
@@ -54,7 +54,7 @@ impl<'a> RequestBuilder<'a> {
             req: HttpRequest {
                 method,
                 url,
-                headers: vec![],
+                headers: reqwest::header::HeaderMap::new(),
                 form: None,
                 json: None,
                 basic_auth: None,
@@ -63,8 +63,13 @@ impl<'a> RequestBuilder<'a> {
         }
     }
 
-    pub fn header(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
-        self.req.headers.push((key.into(), value.into()));
+    pub fn header(mut self, key: &str, value: &str) -> Self {
+        if let (Ok(name), Ok(val)) = (
+            reqwest::header::HeaderName::try_from(key),
+            reqwest::header::HeaderValue::try_from(value),
+        ) {
+            self.req.headers.insert(name, val);
+        }
         self
     }
 
@@ -123,6 +128,12 @@ impl ResponseWrapper {
                 }
             } else if let Some(s) = self.res.body.as_str() {
                 message = s.to_string();
+            }
+
+            // Prevent sensitive information exposure or massive log spam
+            if message.len() > 512 {
+                message.truncate(512);
+                message.push_str("... (truncated)");
             }
 
             Err(crate::error::ConnectError::ProviderApiError { code, message })
@@ -215,16 +226,7 @@ impl HttpClient for ReqwestClient {
             let mut builder = self.client.request(method, &req.url);
 
             if !req.headers.is_empty() {
-                let mut headers = reqwest::header::HeaderMap::with_capacity(req.headers.len());
-                for (k, v) in &req.headers {
-                    if let (Ok(name), Ok(value)) = (
-                        reqwest::header::HeaderName::try_from(k.as_str()),
-                        reqwest::header::HeaderValue::try_from(v.as_str()),
-                    ) {
-                        headers.insert(name, value);
-                    }
-                }
-                builder = builder.headers(headers);
+                builder = builder.headers(req.headers);
             }
 
             if let Some(token) = &req.bearer_auth {
@@ -236,7 +238,10 @@ impl HttpClient for ReqwestClient {
             }
 
             if let Some(f) = req.form {
-                builder = builder.body(f).header(reqwest::header::CONTENT_TYPE, "application/x-www-form-urlencoded");
+                builder = builder.body(f).header(
+                    reqwest::header::CONTENT_TYPE,
+                    "application/x-www-form-urlencoded",
+                );
             } else if let Some(j) = req.json {
                 builder = builder.json(&j);
             }
@@ -252,16 +257,7 @@ impl HttpClient for ReqwestClient {
             let mut builder = self.client.request(method, &req.url);
 
             if !req.headers.is_empty() {
-                let mut headers = reqwest::header::HeaderMap::with_capacity(req.headers.len());
-                for (k, v) in &req.headers {
-                    if let (Ok(name), Ok(value)) = (
-                        reqwest::header::HeaderName::try_from(k.as_str()),
-                        reqwest::header::HeaderValue::try_from(v.as_str()),
-                    ) {
-                        headers.insert(name, value);
-                    }
-                }
-                builder = builder.headers(headers);
+                builder = builder.headers(req.headers);
             }
 
             if let Some(token) = &req.bearer_auth {
@@ -297,17 +293,28 @@ impl HttpClient for ReqwestClient {
         let status = res.status().as_u16();
         tracing::debug!(status = %status, "Received HTTP response");
 
-        // Use Content-Length if available, otherwise default to 8KB to minimize reallocations
+        // Fast path parsing of `Content-Length` manipulating bytes directly,
+        // bypassing string allocation and UTF-8 validation since bytes are ASCII digits.
         let capacity = res
             .headers()
             .get(reqwest::header::CONTENT_LENGTH)
-            .and_then(|h| h.to_str().ok())
-            .and_then(|s| s.parse::<usize>().ok())
+            .map(|h| h.as_bytes())
+            .and_then(|bytes| {
+                bytes.iter().try_fold(0usize, |acc, &b| {
+                    if b.is_ascii_digit() {
+                        Some(acc.saturating_mul(10).saturating_add((b - b'0') as usize))
+                    } else {
+                        None
+                    }
+                })
+            })
             .unwrap_or(8 * 1024);
 
-        // Read body chunk by chunk up to 2MB to prevent memory exhaustion / DoS
-        let mut body_bytes = Vec::with_capacity(capacity);
         const MAX_BODY_SIZE: usize = 2 * 1024 * 1024; // 2MB limit
+
+        // Read body chunk by chunk up to 2MB to prevent memory exhaustion / DoS
+        // Cap the initial allocation at MAX_BODY_SIZE to prevent OOM if Content-Length is spoofed
+        let mut body_bytes = Vec::with_capacity(capacity.min(MAX_BODY_SIZE));
 
         while let Some(chunk) = res
             .chunk()
@@ -326,7 +333,10 @@ impl HttpClient for ReqwestClient {
             Ok(v) => v,
             Err(_) => {
                 let text = String::from_utf8(body_bytes).map_err(|e| {
-                    crate::error::ConnectError::Provider(format!("Response body is not valid UTF-8: {}", e))
+                    crate::error::ConnectError::Provider(format!(
+                        "Response body is not valid UTF-8: {}",
+                        e
+                    ))
                 })?;
                 Value::String(text)
             }
@@ -391,8 +401,8 @@ mod tests {
         assert_eq!(req.method, "POST");
         assert_eq!(req.url, "https://example.com/api");
         assert_eq!(
-            req.headers,
-            vec![("X-Test".to_string(), "Value".to_string())]
+            req.headers.get("X-Test").and_then(|v| v.to_str().ok()),
+            Some("Value")
         );
         assert_eq!(req.bearer_auth, Some("my_token".to_string()));
         assert_eq!(
@@ -400,10 +410,7 @@ mod tests {
             Some(("username".to_string(), Some("password".to_string())))
         );
         assert_eq!(req.json, Some(json!({"hello": "world"})));
-        assert_eq!(
-            req.form,
-            Some("param1=val1&param2=val2".to_string())
-        );
+        assert_eq!(req.form, Some("param1=val1&param2=val2".to_string()));
     }
 
     #[test]

@@ -5,10 +5,9 @@ use crate::user::ConnectUser;
 use async_trait::async_trait;
 use serde_json::Value;
 
-
 pub struct CognitoProvider {
     client_id: String,
-    client_secret: String,
+    client_secret: secrecy::SecretString,
     redirect_url: String,
     domain: String,
     http_client: ::std::sync::Arc<dyn crate::client::HttpClient>,
@@ -21,10 +20,23 @@ impl CognitoProvider {
     /// Note: domain should be the full base url, e.g., <https://my-domain.auth.us-east-1.amazoncognito.com>
     pub fn new(
         client_id: String,
-        client_secret: String,
+        client_secret: secrecy::SecretString,
         redirect_url: String,
         domain: String,
     ) -> Self {
+        use secrecy::ExposeSecret;
+        assert!(
+            !client_id.is_empty(),
+            "Socialite Error: client_id cannot be empty"
+        );
+        assert!(
+            !client_secret.expose_secret().is_empty(),
+            "Socialite Error: client_secret cannot be empty"
+        );
+        assert!(
+            redirect_url.starts_with("http"),
+            "Socialite Error: redirect_url must be a valid HTTP/HTTPS URL"
+        );
         let clean_domain = domain.trim_end_matches('/').to_string();
         Self {
             client_id,
@@ -84,7 +96,7 @@ impl Provider for CognitoProvider {
     ) -> Result<crate::user::ConnectUser, crate::error::ConnectError> {
         let form_data = crate::provider::TokenExchangeForm {
             client_id: self.client_id.as_str(),
-            client_secret: Some(self.client_secret.as_str()),
+            client_secret: Some(secrecy::ExposeSecret::expose_secret(&self.client_secret)),
             code: params.auth_code,
             grant_type: Some("authorization_code"),
             redirect_uri: self.redirect_url.as_str(),
@@ -124,7 +136,7 @@ impl Provider for CognitoProvider {
             avatar_url: user_res["picture"].as_str().map(String::from),
             email_verified: None,
             raw_data: user_res,
-            access_token: access_token.to_string(),
+            access_token: secrecy::SecretString::from(access_token.to_string()),
             refresh_token: None,
             expires_in: None,
         })
@@ -142,13 +154,13 @@ impl Provider for CognitoProvider {
             self.http_client.as_ref(),
             &self.token_url(),
             &self.client_id,
-            &self.client_secret,
+            secrecy::ExposeSecret::expose_secret(&self.client_secret),
             refresh_token,
         )
         .await?;
 
         let mut user = self.get_user_from_token(&token.access_token).await?;
-        user.refresh_token = token.refresh_token;
+        user.refresh_token = token.refresh_token.map(secrecy::SecretString::from);
         user.expires_in = token.expires_in;
         Ok(user)
     }
@@ -162,7 +174,7 @@ mod tests {
     fn test_cognito_redirect_url() {
         let provider = CognitoProvider::new(
             "client_id".to_string(),
-            "client_secret".to_string(),
+            secrecy::SecretString::from("client_secret".to_string()),
             "https://redirect.url".to_string(),
             "https://my-domain.auth.us-east-1.amazoncognito.com".to_string(),
         );

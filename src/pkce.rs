@@ -8,11 +8,13 @@ use sha2::{Digest, Sha256};
 /// - `code_challenge`: The base64-url-encoded SHA256 hash of the verifier. Sent in the authorization URL.
 pub fn generate_pkce() -> (String, String) {
     // Generate a 64-character random string (verifier)
-    let code_verifier: String = rand::rng()
-        .sample_iter(&Alphanumeric)
-        .take(64)
-        .map(char::from)
-        .collect();
+    let mut code_verifier = String::with_capacity(64);
+    code_verifier.extend(
+        rand::rng()
+            .sample_iter(&Alphanumeric)
+            .take(64)
+            .map(char::from),
+    );
 
     // SHA256 hash
     let mut hasher = Sha256::new();

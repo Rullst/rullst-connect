@@ -56,7 +56,7 @@ cargo add rullst-connect
 Or manually add it to your `Cargo.toml`:
 ```toml
 [dependencies]
-rullst-connect = "9.0.0"
+rullst-connect = "10.0.0"
 tokio = { version = "1.52", features = ["full"] }
 ```
 
@@ -124,7 +124,11 @@ If an access token expires, you can seamlessly renew it without asking the user 
 
 ```rust
 let refreshed_user = github.refresh_token("existing_refresh_token_string").await?;
-println!("New Access Token: {}", refreshed_user.access_token);
+// Tokens are wrapped in `secrecy::SecretString` to prevent accidental log leakage ([REDACTED]).
+// When you need to send it to an API, expose it explicitly:
+use secrecy::ExposeSecret;
+let raw_token = refreshed_user.access_token.expose_secret();
+println!("Successfully refreshed token securely!");
 ```
 
 ### 🔒 PKCE Support (v9.0.0+)

@@ -18,7 +18,7 @@ impl Provider for MicrosoftProvider {
     ) -> Result<ConnectUser, crate::error::ConnectError> {
         let form_data = crate::provider::TokenExchangeForm {
             client_id: self.client_id.as_str(),
-            client_secret: Some(self.client_secret.as_str()),
+            client_secret: Some(secrecy::ExposeSecret::expose_secret(&self.client_secret)),
             code: params.auth_code,
             grant_type: Some("authorization_code"),
             redirect_uri: self.redirect_url.as_str(),
@@ -65,7 +65,7 @@ impl Provider for MicrosoftProvider {
             avatar_url: None, // Requires a separate request to /me/photo/$value
             email_verified: None,
             raw_data: user_res,
-            access_token: access_token.to_string(),
+            access_token: secrecy::SecretString::from(access_token.to_string()),
             refresh_token: None,
             expires_in: None,
         })

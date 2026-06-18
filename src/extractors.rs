@@ -31,10 +31,22 @@ impl AuthCallback {
     pub fn verify_state(&self, session_state: &str) -> Result<(), crate::error::ConnectError> {
         use subtle::ConstantTimeEq;
         match &self.state {
-            Some(state) if bool::from(state.as_bytes().ct_eq(session_state.as_bytes())) => Ok(()),
-            Some(_) => Err(crate::error::ConnectError::InvalidState(
-                "CSRF state mismatch".into(),
-            )),
+            Some(state) => {
+                let state_bytes = state.as_bytes();
+                let session_bytes = session_state.as_bytes();
+
+                // ConstantTimeEq panics if slices have different lengths!
+                // We MUST check lengths first to avoid a trivial DoS vulnerability.
+                if state_bytes.len() == session_bytes.len()
+                    && bool::from(state_bytes.ct_eq(session_bytes))
+                {
+                    Ok(())
+                } else {
+                    Err(crate::error::ConnectError::InvalidState(
+                        "CSRF state mismatch".into(),
+                    ))
+                }
+            }
             None => Err(crate::error::ConnectError::InvalidState(
                 "State missing in callback".into(),
             )),
@@ -118,6 +130,7 @@ where
         use subtle::ConstantTimeEq;
         let session_state: Option<String> = session.remove("oauth_state").await.unwrap_or(None);
         if let Some(saved) = session_state
+            && state_param.len() == saved.len()
             && bool::from(state_param.as_bytes().ct_eq(saved.as_bytes()))
         {
             // Valid!

@@ -24,13 +24,58 @@ pub struct ConnectUser {
     pub raw_data: Value,
 
     /// The access token retrieved during the OAuth2 flow.
-    pub access_token: String,
+    #[serde(with = "secret_serde")]
+    pub access_token: secrecy::SecretString,
 
     /// The refresh token retrieved during the OAuth2 flow (if provided).
-    pub refresh_token: Option<String>,
+    #[serde(with = "opt_secret_serde")]
+    pub refresh_token: Option<secrecy::SecretString>,
 
     /// The token expiration time in seconds from the time it was granted (if provided).
     pub expires_in: Option<u64>,
+}
+
+mod secret_serde {
+    use secrecy::{ExposeSecret, SecretString};
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    pub fn serialize<S>(secret: &SecretString, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        secret.expose_secret().serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<SecretString, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Ok(SecretString::from(s))
+    }
+}
+
+mod opt_secret_serde {
+    use secrecy::{ExposeSecret, SecretString};
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    pub fn serialize<S>(secret: &Option<SecretString>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match secret {
+            Some(s) => s.expose_secret().serialize(serializer),
+            None => serializer.serialize_none(),
+        }
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<SecretString>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let opt = Option::<String>::deserialize(deserializer)?;
+        Ok(opt.map(SecretString::from))
+    }
 }
 
 use async_trait::async_trait;
@@ -70,8 +115,8 @@ mod tests {
             email_verified: Some(true),
             avatar_url: Some("https://example.com/avatar.png".to_string()),
             raw_data: json!({"custom_field": "custom_value"}),
-            access_token: "access123".to_string(),
-            refresh_token: Some("refresh123".to_string()),
+            access_token: secrecy::SecretString::from("access123".to_string()),
+            refresh_token: Some(secrecy::SecretString::from("refresh123".to_string())),
             expires_in: Some(3600),
         };
 
@@ -84,8 +129,18 @@ mod tests {
         assert_eq!(user.email_verified, deserialized.email_verified);
         assert_eq!(user.avatar_url, deserialized.avatar_url);
         assert_eq!(user.raw_data, deserialized.raw_data);
-        assert_eq!(user.access_token, deserialized.access_token);
-        assert_eq!(user.refresh_token, deserialized.refresh_token);
+        use secrecy::ExposeSecret;
+        assert_eq!(
+            user.access_token.expose_secret(),
+            deserialized.access_token.expose_secret()
+        );
+        assert_eq!(
+            user.refresh_token.as_ref().map(|s| s.expose_secret()),
+            deserialized
+                .refresh_token
+                .as_ref()
+                .map(|s| s.expose_secret())
+        );
         assert_eq!(user.expires_in, deserialized.expires_in);
     }
 }

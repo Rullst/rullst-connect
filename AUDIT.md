@@ -101,7 +101,8 @@ The `code_verifier` is correctly propagated through `ExchangeParams<'_>` and the
 - **NEW (v10.0.0):** Previously `decode_apple_id_token` silently ignored the `_expected_nonce` parameter (prefixed with underscore). This is now fully implemented. When present, the `nonce` claim is enforced as required in the JWT validation and then compared via `subtle::ConstantTimeEq` — closing a potential replay attack vector.
 
 #### Generic OIDC (`src/providers/oidc.rs`)
-- Fetches JWKS at discovery time (no lazy initialization needed — fully upfront).
+- Fetches JWKS lazily using `tokio::sync::OnceCell` upon the first token validation, eliminating blocking network calls during the synchronous `discover()` phase.
+- **NEW (v10.0.0):** Added strict runtime SSRF & Open Redirect mitigations during the `discover()` phase by explicitly validating that both the `issuer_url` and `redirect_url` begin with standard HTTP/HTTPS schemes before making any network requests.
 - Discovery URL is built with both trailing-slash and non-trailing-slash normalization.
 - All 5 required discovery document fields (`authorization_endpoint`, `token_endpoint`, `userinfo_endpoint`, `jwks_uri`, `issuer`) are validated — returns a descriptive `Provider` error for each missing field.
 - **NEW (v10.0.0):** Same nonce hardening applied as for Google — `set_required_spec_claims(&["nonce"])` enforced and constant-time `ct_eq` comparison applied.
@@ -111,9 +112,10 @@ The `code_verifier` is correctly propagated through `ExchangeParams<'_>` and the
 **Assessment: PASS ✅**
 
 - All providers use **`Authorization: Bearer <token>`** HTTP headers for API calls — tokens are never exposed in URL query parameters (prevents leakage in server logs, proxy caches, and `Referer` headers).
-- `client_secret` is sent in the **POST body** (not the URL) in all token exchange requests, now serialized via `TokenExchangeForm` with `serde_urlencoded`.
+- The `client_secret` (a JWT signed with an ES256 P8 key) is generated completely internally on every exchange.
+- **NEW (v10.0.0):** Reduced the dynamically generated `client_secret` JWT expiration from 30 days to 5 minutes (300 seconds), providing Defense in Depth by enforcing short-lived credentials and minimizing the attack surface in case of token interception.
 - Apple's `client_secret` is ephemeral — generated fresh on every call, never stored.
-- No provider stores credentials beyond the lifetime of a request.
+- **NEW (v10.0.0):** All `client_secret`, `access_token`, and `refresh_token` fields are now strictly typed using the `secrecy::SecretString` wrapper. This physically prevents credentials from being accidentally logged, printed via `dbg!()`, or captured in panic traces. The secrets are exposed in-memory (`.expose_secret()`) exclusively at the exact moment of HTTP transport, enforcing zeroization when dropped.
 
 ### 5. Dependency Shielding (Public API Isolation)
 
@@ -281,6 +283,11 @@ The `!=` operator performs a short-circuit lexicographic comparison — it halts
 **Issue:** All providers constructed a `Vec<(&str, &str)>` on the heap for every token exchange request, with optional fields requiring a mutable `push`. The `RequestBuilder::form` method previously re-serialized these into yet another heap-allocated `String`. This resulted in multiple allocations on every single authentication flow.  
 **Resolution:** Introduced `TokenExchangeForm<'a>` — a stack-allocated, `serde`-serializable struct with `#[serde(skip_serializing_if = "Option::is_none")]` for optional fields. `RequestBuilder::form` now calls `serde_urlencoded::to_string()` once, producing the final body string in a single allocation. The `HttpRequest::form` field type was changed from `Vec<(String, String)>` to `Option<String>` to carry this pre-serialized value directly to `reqwest`.
 
+### FINDING-13 ✅ RESOLVED — HIGH — Token & Secret Exposure in Logs and Memory (v10.0.0)
+**Severity:** High (Security)
+**Issue:** Highly sensitive OAuth credentials such as `client_secret`, `access_token`, and `refresh_token` were stored and passed around as raw `String`s. This meant any developer running `dbg!(provider)` or accidentally logging the `ConnectUser` struct could leak thousands of active, powerful access tokens into their APM systems (like Datadog/New Relic) or terminal logs. Furthermore, the strings persisted in memory without explicitly being zeroed out.
+**Resolution:** Completely migrated the codebase to use the `secrecy` crate. All sensitive fields are now strictly typed as `secrecy::SecretString`. This prevents accidental printing (it masks output as `[REDACTED]`), prevents leakages in standard logs, and enforces developers to consciously call `.expose_secret()` only when actively using the token. Memory is safely zeroed upon dropping the struct.
+
 ---
 
 ## 💯 Overall Security Scorecard
@@ -290,7 +297,7 @@ The `!=` operator performs a short-circuit lexicographic comparison — it halts
 | **CSRF Prevention** | **10/10** | Constant-time `ct_eq` via `subtle`, one-time-use atomic state removal |
 | **PKCE Implementation** | **10/10** | RFC 7636 S256 compliant, `code_verifier` correctly propagated to all providers |
 | **JWT / OIDC Validation** | **10/10** | RSA JWKS verification, `aud`/`iss`/`exp`/`nonce` enforced; nonce now constant-time compared on Google, Apple, and OIDC |
-| **Credential Transport** | **10/10** | Bearer headers only, no URL exposure, ephemeral Apple secrets |
+| **Credential Transport** | **10/10** | Bearer headers only, ephemeral Apple secrets, `secrecy::SecretString` masking for all tokens/secrets preventing log exposure |
 | **Dependency Shielding** | **10/10** | Stringified errors, internal crate types not exposed in public API; no unmaintained crates in tree |
 | **Input Validation** | **10/10** | Hard `assert!` in constructors, no silent `""` defaults for user IDs |
 | **Memory Safety** | **10/10** | Zero `unsafe` blocks in the entire codebase |
