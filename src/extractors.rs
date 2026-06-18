@@ -116,12 +116,11 @@ where
         })?;
 
         use subtle::ConstantTimeEq;
-        let session_state: Option<String> = session.get("oauth_state").await.unwrap_or(None);
+        let session_state: Option<String> = session.remove("oauth_state").await.unwrap_or(None);
         if let Some(saved) = session_state
             && bool::from(state_param.as_bytes().ct_eq(saved.as_bytes()))
         {
-            // Valid! Remove it so it can't be reused
-            let _ = session.remove::<String>("oauth_state").await;
+            // Valid!
             Ok(Self { callback })
         } else {
             Err(axum::response::IntoResponse::into_response((

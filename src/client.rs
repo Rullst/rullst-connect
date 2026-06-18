@@ -7,7 +7,7 @@ pub struct HttpRequest {
     pub method: String,
     pub url: String,
     pub headers: Vec<(String, String)>,
-    pub form: Vec<(String, String)>,
+    pub form: Option<String>,
     pub json: Option<Value>,
     pub basic_auth: Option<(String, Option<String>)>,
     pub bearer_auth: Option<String>,
@@ -55,7 +55,7 @@ impl<'a> RequestBuilder<'a> {
                 method,
                 url,
                 headers: vec![],
-                form: vec![],
+                form: None,
                 json: None,
                 basic_auth: None,
                 bearer_auth: None,
@@ -87,18 +87,8 @@ impl<'a> RequestBuilder<'a> {
         self
     }
 
-    pub fn form<I, K, V>(mut self, form: I) -> Self
-    where
-        I: IntoIterator<Item = (K, V)>,
-        K: Into<String>,
-        V: Into<String>,
-    {
-        let iter = form.into_iter();
-        let (lower, _) = iter.size_hint();
-        self.req.form.reserve(lower);
-        for (k, v) in iter {
-            self.req.form.push((k.into(), v.into()));
-        }
+    pub fn form<T: serde::Serialize + ?Sized>(mut self, form: &T) -> Self {
+        self.req.form = serde_urlencoded::to_string(form).ok();
         self
     }
 
@@ -245,8 +235,8 @@ impl HttpClient for ReqwestClient {
                 builder = builder.basic_auth(user, pass.as_deref());
             }
 
-            if !req.form.is_empty() {
-                builder = builder.form(&req.form);
+            if let Some(f) = &req.form {
+                builder = builder.body(f.clone()).header(reqwest::header::CONTENT_TYPE, "application/x-www-form-urlencoded");
             } else if let Some(j) = &req.json {
                 builder = builder.json(j);
             }
@@ -282,10 +272,9 @@ impl HttpClient for ReqwestClient {
                 builder = builder.basic_auth(user, pass.as_deref());
             }
 
-            if !req.form.is_empty() {
+            if let Some(body) = &req.form {
                 // reqwest_middleware::RequestBuilder doesn't have `.form()`, we set body and headers manually
-                let body = serde_urlencoded::to_string(&req.form).unwrap_or_default();
-                builder = builder.body(body).header(
+                builder = builder.body(body.clone()).header(
                     reqwest::header::CONTENT_TYPE,
                     "application/x-www-form-urlencoded",
                 );
@@ -382,7 +371,7 @@ mod tests {
         .bearer_auth("my_token")
         .basic_auth("username", Some("password"))
         .json(json!({"hello": "world"}))
-        .form([("param1", "val1"), ("param2", "val2")]);
+        .form(&[("param1", "val1"), ("param2", "val2")]);
 
         let wrapper = builder.send().await.expect("Failed to send request");
         let res_json: serde_json::Value =
@@ -408,10 +397,7 @@ mod tests {
         assert_eq!(req.json, Some(json!({"hello": "world"})));
         assert_eq!(
             req.form,
-            vec![
-                ("param1".to_string(), "val1".to_string()),
-                ("param2".to_string(), "val2".to_string())
-            ]
+            Some("param1=val1&param2=val2".to_string())
         );
     }
 

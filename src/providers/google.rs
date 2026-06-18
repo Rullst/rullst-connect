@@ -11,7 +11,7 @@ pub struct GoogleProvider {
     pub(crate) client_secret: String,
     pub(crate) redirect_url: String,
     pub(crate) http_client: ::std::sync::Arc<dyn crate::client::HttpClient>,
-    pub(crate) scopes: Vec<String>,
+    pub(crate) scopes: String,
     pub(crate) state: Option<String>,
     pub(crate) pkce_challenge: Option<String>,
     pub(crate) jwks: OnceCell<jsonwebtoken::jwk::JwkSet>,
@@ -45,11 +45,7 @@ impl GoogleProvider {
             client_secret,
             redirect_url,
             http_client: crate::client::DEFAULT_HTTP_CLIENT.clone(),
-            scopes: vec![
-                "openid".to_string(),
-                "profile".to_string(),
-                "email".to_string(),
-            ],
+            scopes: "openid profile email".to_string(),
             state: None,
             pkce_challenge: None,
             jwks: OnceCell::new(),
@@ -57,7 +53,7 @@ impl GoogleProvider {
     }
 
     pub fn with_scopes(mut self, scopes: &[&str]) -> Self {
-        self.scopes = scopes.iter().copied().map(String::from).collect();
+        self.scopes = scopes.join(" ");
         self
     }
 
@@ -104,7 +100,7 @@ impl GoogleProvider {
 
     async fn get_user_from_form(
         &self,
-        form_data: Vec<(&str, &str)>,
+        form_data: &crate::provider::TokenExchangeForm<'_>,
         expected_nonce: Option<&str>,
     ) -> Result<ConnectUser, crate::error::ConnectError> {
         // Exchange code for token
@@ -164,12 +160,14 @@ impl GoogleProvider {
 
                 let p = token_data.claims;
 
-                if let Some(nonce) = expected_nonce
-                    && p["nonce"].as_str() != Some(nonce)
-                {
-                    return Err(crate::error::ConnectError::Provider(
-                        "Google id_token nonce mismatch".to_owned(),
-                    ));
+                if let Some(nonce) = expected_nonce {
+                    let token_nonce = p["nonce"].as_str().unwrap_or("");
+                    use subtle::ConstantTimeEq;
+                    if !bool::from(token_nonce.as_bytes().ct_eq(nonce.as_bytes())) {
+                        return Err(crate::error::ConnectError::Provider(
+                            "Google id_token nonce mismatch".to_owned(),
+                        ));
+                    }
                 }
 
                 ConnectUser {
@@ -212,17 +210,15 @@ impl Provider for GoogleProvider {
         &self,
         params: crate::provider::ExchangeParams<'_>,
     ) -> Result<ConnectUser, crate::error::ConnectError> {
-        let mut form_data = vec![
-            ("client_id", self.client_id.as_str()),
-            ("client_secret", self.client_secret.as_str()),
-            ("code", params.auth_code),
-            ("grant_type", "authorization_code"),
-            ("redirect_uri", self.redirect_url.as_str()),
-        ];
-        if let Some(verifier) = params.code_verifier {
-            form_data.push(("code_verifier", verifier));
-        }
-        self.get_user_from_form(form_data, params.expected_nonce)
+        let form_data = crate::provider::TokenExchangeForm {
+            client_id: self.client_id.as_str(),
+            client_secret: Some(self.client_secret.as_str()),
+            code: params.auth_code,
+            grant_type: Some("authorization_code"),
+            redirect_uri: self.redirect_url.as_str(),
+            code_verifier: params.code_verifier,
+        };
+        self.get_user_from_form(&form_data, params.expected_nonce)
             .await
     }
 
@@ -264,7 +260,7 @@ impl Provider for GoogleProvider {
     async fn revoke_token(&self, token: &str) -> Result<(), crate::error::ConnectError> {
         self.http_client
             .post("https://oauth2.googleapis.com/revoke")
-            .form([("token", token)])
+            .form(&[("token", token)])
             .send()
             .await?
             .error_for_status()?;

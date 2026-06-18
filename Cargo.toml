@@ -1,6 +1,6 @@
 [package]
 name = "rullst-connect"
-version = "9.0.1"
+version = "10.0.0"
 edition = "2024"
 description = "OAuth2 Social Login for Rust web frameworks."
 license = "MIT"

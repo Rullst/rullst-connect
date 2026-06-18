@@ -13,8 +13,8 @@ impl FacebookProvider {
     ) -> Result<ConnectUser, crate::error::ConnectError> {
         let token_res = self
             .http_client
-            .post(self.token_url())
-            .form(form_data)
+            .post(&self.token_url())
+            .form(&form_data)
             .send()
             .await?
             .error_for_status()?

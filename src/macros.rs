@@ -13,7 +13,7 @@ macro_rules! define_provider {
             pub(crate) client_secret: String,
             pub(crate) redirect_url: String,
             pub(crate) http_client: ::std::sync::Arc<dyn $crate::client::HttpClient>,
-            pub(crate) scopes: Vec<String>,
+            pub(crate) scopes: String,
             pub(crate) state: Option<String>,
             pub(crate) pkce_challenge: Option<String>,
         }
@@ -29,7 +29,7 @@ macro_rules! define_provider {
                     client_secret,
                     redirect_url,
                     http_client: $crate::client::DEFAULT_HTTP_CLIENT.clone(),
-                    scopes: vec![$($default_scope.to_owned()),*],
+                    scopes: [$($default_scope),*].join(" "),
                     state: None,
                     pkce_challenge: None,
                 }
@@ -37,7 +37,7 @@ macro_rules! define_provider {
 
             /// Overrides the default scopes for this provider.
             pub fn with_scopes(mut self, scopes: &[&str]) -> Self {
-                self.scopes = scopes.iter().copied().map(String::from).collect();
+                self.scopes = scopes.join(" ");
                 self
             }
 
@@ -75,7 +75,7 @@ macro_rules! impl_standard_redirect_url {
     ($url:expr) => {
         fn redirect_url(&self) -> String {
             let mut params = $crate::provider::build_oauth_params(
-                $url.to_string(),
+                $url,
                 &self.client_id,
                 &self.redirect_url,
                 &self.scopes,
@@ -139,7 +139,7 @@ mod tests {
         assert_eq!(provider.redirect_url, "http://redirect_url");
         assert_eq!(
             provider.scopes,
-            vec!["default_scope1".to_string(), "default_scope2".to_string()]
+            "default_scope1 default_scope2".to_string()
         );
         assert_eq!(provider.state, None);
         assert_eq!(provider.pkce_challenge, None);
@@ -156,7 +156,7 @@ mod tests {
 
         assert_eq!(
             provider.scopes,
-            vec!["new_scope1".to_string(), "new_scope2".to_string()]
+            "new_scope1 new_scope2".to_string()
         );
     }
 

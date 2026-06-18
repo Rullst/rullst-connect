@@ -5,11 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [9.0.2] - Unreleased
+## [10.0.0] - Unreleased
+
+### [BREAKING CHANGE]
+- **`build_oauth_params` Signature Change**: The signature of the public helper function `rullst_connect::provider::build_oauth_params` has been updated to accept `base_url` as `&str` and `scopes` as `&str` (previously `String` and `&[String]`). This eliminates cascading heap allocations during URL generation. Developers implementing custom providers using this helper must update their calls to pass string references. The primary user-facing builder API (`with_scopes`) is completely unaffected.
+
+- **`HttpRequest` Form Type**: The `form` field in `rullst_connect::client::HttpRequest` has been changed from `Vec<(String, String)>` to `Option<String>`. This breaking change allows providers to serialize form data directly into a single pre-allocated string (using structures like `TokenExchangeForm`), completely eliminating dynamic vector and string allocations during token exchanges. Custom HTTP client implementations must be updated to accept the pre-serialized string.
 
 ### Performance
+- **Zero-Allocation Token Exchanges**: Introduced `TokenExchangeForm` across all OAuth providers. This static struct uses `serde` to efficiently serialize form data directly into the HTTP request body without intermediate `Vec` or `String` allocations on the hot path.
+- **Atomic Session Extraction**: Optimized the Axum `AuthCallback` extractor to use `session.remove()` directly instead of sequentially calling `session.get()` followed by `session.remove()`. This cuts backend I/O operations (e.g., Redis or database calls) in half during the OAuth callback phase.
 - **Global Connection Pooling**: Centralized HTTP client instantiation by introducing a globally shared `reqwest::Client` (via `LazyLock`) in `src/client.rs`. This prevents each provider from creating its own isolated connection pool, dramatically reducing memory overhead, DNS lookups, and thread spawning in multi-provider environments.
 - **URL Serialization**: Optimized `redirect_url` string allocations across all providers by preventing unnecessary `format!()` concatenations and leveraging `url::form_urlencoded::Serializer::for_suffix` to safely append queries directly to the base URL without duplicate memory allocations.
+- **Pre-joined Scopes**: Provider scopes are now pre-joined into a single `String` at provider initialization time rather than being dynamically allocated and joined as a `Vec<String>` on every authentication request, drastically reducing allocations in the hot path.
+
+### Security
+- **OIDC Nonce Timing Attacks**: Hardened OpenID Connect (OIDC), Google, and Apple providers against timing side-channel attacks during ID token validation. The `nonce` claim is now verified using constant-time comparison via `subtle::ConstantTimeEq` instead of standard string equality. Added strict enforcement requiring the `nonce` claim to be present in the JWT when expected.
 
 ## [9.0.1] - 2026-06-18
 

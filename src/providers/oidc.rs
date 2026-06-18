@@ -11,7 +11,7 @@ pub struct OidcProvider {
     pub(crate) client_secret: String,
     pub(crate) redirect_url: String,
     pub(crate) http_client: Arc<dyn HttpClient>,
-    pub(crate) scopes: Vec<String>,
+    pub(crate) scopes: String,
     pub(crate) state: Option<String>,
     pub(crate) pkce_challenge: Option<String>,
 
@@ -112,11 +112,7 @@ impl OidcProvider {
             client_secret,
             redirect_url,
             http_client: client,
-            scopes: vec![
-                "openid".to_string(),
-                "profile".to_string(),
-                "email".to_string(),
-            ],
+            scopes: "openid profile email".to_string(),
             state: None,
             pkce_challenge: None,
             authorization_endpoint,
@@ -128,7 +124,7 @@ impl OidcProvider {
     }
 
     pub fn with_scopes(mut self, scopes: &[&str]) -> Self {
-        self.scopes = scopes.iter().copied().map(String::from).collect();
+        self.scopes = scopes.join(" ");
         self
     }
 
@@ -150,7 +146,7 @@ impl OidcProvider {
     #[tracing::instrument(skip(self, form_data))]
     async fn get_user_from_form(
         &self,
-        form_data: Vec<(&str, &str)>,
+        form_data: &crate::provider::TokenExchangeForm<'_>,
         expected_nonce: Option<&str>,
     ) -> Result<ConnectUser, ConnectError> {
         let token_res = self
@@ -208,12 +204,14 @@ impl OidcProvider {
                     )?;
                 let payload = token_data.claims;
 
-                if let Some(nonce) = expected_nonce
-                    && payload["nonce"].as_str() != Some(nonce)
-                {
-                    return Err(crate::error::ConnectError::Provider(
-                        "OIDC id_token nonce mismatch".to_owned(),
-                    ));
+                if let Some(nonce) = expected_nonce {
+                    let token_nonce = payload["nonce"].as_str().unwrap_or("");
+                    use subtle::ConstantTimeEq;
+                    if !bool::from(token_nonce.as_bytes().ct_eq(nonce.as_bytes())) {
+                        return Err(crate::error::ConnectError::Provider(
+                            "OIDC id_token nonce mismatch".to_owned(),
+                        ));
+                    }
                 }
 
                 ConnectUser {
@@ -259,18 +257,22 @@ impl Provider for OidcProvider {
         &self,
         params: crate::provider::ExchangeParams<'_>,
     ) -> Result<ConnectUser, ConnectError> {
-        let mut form_data = vec![
-            ("client_id", self.client_id.as_str()),
-            ("client_secret", self.client_secret.as_str()),
-            ("code", params.auth_code),
-            ("grant_type", "authorization_code"),
-            ("redirect_uri", self.redirect_url.as_str()),
-        ];
-        if let Some(verifier) = params.code_verifier {
-            form_data.push(("code_verifier", verifier));
-        }
-        self.get_user_from_form(form_data, params.expected_nonce)
-            .await
+        let form_data = crate::provider::TokenExchangeForm {
+            client_id: self.client_id.as_str(),
+            client_secret: Some(self.client_secret.as_str()),
+            code: params.auth_code,
+            grant_type: Some("authorization_code"),
+            redirect_uri: self.redirect_url.as_str(),
+            code_verifier: params.code_verifier,
+        };
+        crate::provider::exchange_and_get_user(
+            self,
+            self.http_client.as_ref(),
+            &self.token_url(),
+            &form_data,
+            params.expected_nonce,
+        )
+        .await
     }
 
     #[tracing::instrument(skip(self, access_token))]

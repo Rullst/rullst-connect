@@ -15,15 +15,21 @@ impl Provider for MicrosoftProvider {
     async fn get_user(
         &self,
         params: crate::provider::ExchangeParams<'_>,
-    ) -> Result<crate::user::ConnectUser, crate::error::ConnectError> {
+    ) -> Result<ConnectUser, crate::error::ConnectError> {
+        let form_data = crate::provider::TokenExchangeForm {
+            client_id: self.client_id.as_str(),
+            client_secret: Some(self.client_secret.as_str()),
+            code: params.auth_code,
+            grant_type: Some("authorization_code"),
+            redirect_uri: self.redirect_url.as_str(),
+            code_verifier: params.code_verifier,
+        };
         crate::provider::exchange_and_get_user(
             self,
             self.http_client.as_ref(),
             &self.token_url(),
-            &self.client_id,
-            &self.client_secret,
-            &self.redirect_url,
-            &params,
+            &form_data,
+            params.expected_nonce,
         )
         .await
     }

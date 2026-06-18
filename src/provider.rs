@@ -4,26 +4,23 @@ use async_trait::async_trait;
 
 /// Helper to construct standard OAuth2 parameters to reduce boilerplate.
 pub fn build_oauth_params<'a>(
-    base_url: String,
+    base_url: &str,
     client_id: &'a str,
     redirect_uri: &'a str,
-    scopes: &'a [String],
+    scopes: &'a str,
     state: Option<&'a str>,
     pkce_challenge: Option<&'a str>,
 ) -> url::form_urlencoded::Serializer<'a, String> {
-    let mut string = base_url;
-    let separator = if string.contains('?') { '&' } else { '?' };
+    let mut string = String::with_capacity(base_url.len() + 256);
+    string.push_str(base_url);
+    let separator = if base_url.contains('?') { '&' } else { '?' };
     string.push(separator);
     let start_position = string.len();
     let mut params = url::form_urlencoded::Serializer::for_suffix(string, start_position);
     params.append_pair("client_id", client_id);
     params.append_pair("redirect_uri", redirect_uri);
     if !scopes.is_empty() {
-        if scopes.len() == 1 {
-            params.append_pair("scope", &scopes[0]);
-        } else {
-            params.append_pair("scope", &scopes.join(" "));
-        }
+        params.append_pair("scope", scopes);
     }
     if let Some(s) = state {
         params.append_pair("state", s);
@@ -35,12 +32,25 @@ pub fn build_oauth_params<'a>(
     params
 }
 
-/// Parameters for exchanging an authorization code for an access token.
+/// Parameters to exchange the authorization code for tokens.
 #[derive(Debug, Default, Clone)]
 pub struct ExchangeParams<'a> {
     pub auth_code: &'a str,
     pub code_verifier: Option<&'a str>,
     pub expected_nonce: Option<&'a str>,
+}
+
+#[derive(serde::Serialize)]
+pub struct TokenExchangeForm<'a> {
+    pub client_id: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub client_secret: Option<&'a str>,
+    pub code: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub grant_type: Option<&'a str>,
+    pub redirect_uri: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub code_verifier: Option<&'a str>,
 }
 
 /// The core trait implemented by all OAuth2 providers in Rullst Connect.
@@ -156,23 +166,8 @@ pub struct Oauth2TokenResponse {
 pub async fn fetch_access_token(
     client: &dyn crate::client::HttpClient,
     token_url: &str,
-    client_id: &str,
-    client_secret: &str,
-    code: &str,
-    redirect_url: &str,
-    code_verifier: Option<&str>,
+    form: &TokenExchangeForm<'_>,
 ) -> Result<Oauth2TokenResponse, crate::error::ConnectError> {
-    let mut form = vec![
-        ("grant_type", "authorization_code"),
-        ("client_id", client_id),
-        ("client_secret", client_secret),
-        ("code", code),
-        ("redirect_uri", redirect_url),
-    ];
-    if let Some(verifier) = code_verifier {
-        form.push(("code_verifier", verifier));
-    }
-
     let token_res = client
         .post(token_url)
         .form(form)
@@ -217,7 +212,7 @@ pub async fn fetch_refresh_token(
 ) -> Result<Oauth2TokenResponse, crate::error::ConnectError> {
     let token_res = client
         .post(token_url)
-        .form([
+        .form(&[
             ("client_id", client_id),
             ("client_secret", client_secret),
             ("refresh_token", refresh_token),
@@ -264,10 +259,8 @@ pub async fn exchange_and_get_user<P>(
     provider: &P,
     client: &dyn crate::client::HttpClient,
     token_url: &str,
-    client_id: &str,
-    client_secret: &str,
-    redirect_url: &str,
-    params: &ExchangeParams<'_>,
+    form: &TokenExchangeForm<'_>,
+    _expected_nonce: Option<&str>,
 ) -> Result<ConnectUser, crate::error::ConnectError>
 where
     P: Provider + ?Sized,
@@ -275,11 +268,7 @@ where
     let token = fetch_access_token(
         client,
         token_url,
-        client_id,
-        client_secret,
-        params.auth_code,
-        redirect_url,
-        params.code_verifier,
+        form,
     )
     .await?;
 
@@ -449,25 +438,23 @@ mod tests {
     #[test]
     fn test_build_oauth_params_variations() {
         // 1. Empty scopes
-        let mut serializer = build_oauth_params("".to_string(), "client", "redirect", &[], None, None);
+        let mut serializer = build_oauth_params("", "client", "redirect", "", None, None);
         let query = serializer.finish();
         assert!(query.contains("client_id=client"));
         assert!(query.contains("redirect_uri=redirect"));
         assert!(!query.contains("scope"));
 
         // 2. Single scope
-        let scopes_single = [String::from("read")];
-        let mut serializer = build_oauth_params("".to_string(), "client", "redirect", &scopes_single, None, None);
+        let mut serializer = build_oauth_params("", "client", "redirect", "read", None, None);
         let query = serializer.finish();
         assert!(query.contains("scope=read"));
 
         // 3. Multiple scopes
-        let scopes_multiple = [String::from("read"), String::from("write")];
         let mut serializer = build_oauth_params(
-            "".to_string(),
+            "",
             "client",
             "redirect",
-            &scopes_multiple,
+            "read write",
             Some("state123"),
             Some("pkce_challenge"),
         );
@@ -509,14 +496,18 @@ mod tests {
     #[tokio::test]
     async fn test_fetch_access_token() {
         let client = MockFetchClient;
+        let form = TokenExchangeForm {
+            client_id: "client_id",
+            client_secret: Some("client_secret"),
+            code: "auth_code",
+            grant_type: Some("authorization_code"),
+            redirect_uri: "https://redirect",
+            code_verifier: Some("verifier"),
+        };
         let res = fetch_access_token(
             &client,
             "https://example.com/token",
-            "client_id",
-            "client_secret",
-            "auth_code",
-            "https://redirect",
-            Some("verifier"),
+            &form,
         )
         .await
         .expect("Failed to fetch access token");

@@ -9,7 +9,7 @@ crate::define_provider!(GithubProvider, "user:email");
 impl GithubProvider {
     async fn get_user_from_form(
         &self,
-        form_data: Vec<(&str, &str)>,
+        form_data: &crate::provider::TokenExchangeForm<'_>,
     ) -> Result<ConnectUser, crate::error::ConnectError> {
         // 1. Exchange authorization code for access token
         let token_res = self
@@ -52,16 +52,15 @@ impl Provider for GithubProvider {
         &self,
         params: crate::provider::ExchangeParams<'_>,
     ) -> Result<ConnectUser, crate::error::ConnectError> {
-        let mut form_data = vec![
-            ("client_id", self.client_id.as_str()),
-            ("client_secret", self.client_secret.as_str()),
-            ("code", params.auth_code),
-            ("redirect_uri", self.redirect_url.as_str()),
-        ];
-        if let Some(verifier) = params.code_verifier {
-            form_data.push(("code_verifier", verifier));
-        }
-        self.get_user_from_form(form_data).await
+        let form_data = crate::provider::TokenExchangeForm {
+            client_id: self.client_id.as_str(),
+            client_secret: Some(self.client_secret.as_str()),
+            code: params.auth_code,
+            grant_type: None,
+            redirect_uri: self.redirect_url.as_str(),
+            code_verifier: params.code_verifier,
+        };
+        self.get_user_from_form(&form_data).await
     }
 
     async fn get_user_from_token(
@@ -110,16 +109,15 @@ impl Provider for GithubProvider {
         &self,
     ) -> Result<crate::user::DeviceAuthorizationResponse, crate::error::ConnectError> {
         let mut form = vec![("client_id", self.client_id.as_str())];
-        let scopes = self.scopes.join(" ");
-        if !scopes.is_empty() {
-            form.push(("scope", scopes.as_str()));
+        if !self.scopes.is_empty() {
+            form.push(("scope", self.scopes.as_str()));
         }
 
         let res = self
             .http_client
             .post("https://github.com/login/device/code")
             .header("Accept", "application/json")
-            .form(form)
+            .form(&form)
             .send()
             .await?
             .error_for_status()?
@@ -166,7 +164,7 @@ impl Provider for GithubProvider {
             .http_client
             .post(self.token_url())
             .header("Accept", "application/json")
-            .form([
+            .form(&[
                 ("client_id", self.client_id.as_str()),
                 ("device_code", device_code),
                 ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),

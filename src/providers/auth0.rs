@@ -12,7 +12,7 @@ pub struct Auth0Provider {
     redirect_url: String,
     domain: String,
     http_client: ::std::sync::Arc<dyn crate::client::HttpClient>,
-    scopes: Vec<String>,
+    scopes: String,
     state: Option<String>,
     pkce_challenge: Option<String>,
 }
@@ -31,18 +31,14 @@ impl Auth0Provider {
             redirect_url,
             domain,
             http_client: crate::client::DEFAULT_HTTP_CLIENT.clone(),
-            scopes: vec![
-                "openid".to_owned(),
-                "profile".to_owned(),
-                "email".to_owned(),
-            ],
+            scopes: "openid profile email".to_string(),
             state: None,
             pkce_challenge: None,
         }
     }
 
     pub fn with_scopes(mut self, scopes: &[&str]) -> Self {
-        self.scopes = scopes.iter().copied().map(String::from).collect();
+        self.scopes = scopes.join(" ");
         self
     }
 
@@ -76,7 +72,7 @@ impl Auth0Provider {
 impl Provider for Auth0Provider {
     fn redirect_url(&self) -> String {
         let mut params = crate::provider::build_oauth_params(
-            format!("https://{}/authorize", self.domain),
+            &format!("https://{}/authorize", self.domain),
             &self.client_id,
             &self.redirect_url,
             &self.scopes,
@@ -91,14 +87,20 @@ impl Provider for Auth0Provider {
         &self,
         params: crate::provider::ExchangeParams<'_>,
     ) -> Result<crate::user::ConnectUser, crate::error::ConnectError> {
+        let form_data = crate::provider::TokenExchangeForm {
+            client_id: self.client_id.as_str(),
+            client_secret: Some(self.client_secret.as_str()),
+            code: params.auth_code,
+            grant_type: Some("authorization_code"),
+            redirect_uri: self.redirect_url.as_str(),
+            code_verifier: params.code_verifier,
+        };
         crate::provider::exchange_and_get_user(
             self,
             self.http_client.as_ref(),
             &self.token_url(),
-            &self.client_id,
-            &self.client_secret,
-            &self.redirect_url,
-            &params,
+            &form_data,
+            params.expected_nonce,
         )
         .await
     }

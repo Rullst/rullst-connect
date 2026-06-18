@@ -17,7 +17,7 @@ pub struct AppleProvider {
     private_key_pem: String,
     redirect_url: String,
     http_client: ::std::sync::Arc<dyn crate::client::HttpClient>,
-    scopes: Vec<String>,
+    scopes: String,
     state: Option<String>,
     pkce_challenge: Option<String>,
     jwks: OnceCell<jsonwebtoken::jwk::JwkSet>,
@@ -49,7 +49,7 @@ impl AppleProvider {
             private_key_pem,
             redirect_url,
             http_client: crate::client::DEFAULT_HTTP_CLIENT.clone(),
-            scopes: vec!["name".to_string(), "email".to_string()],
+            scopes: "name email".to_string(),
             state: None,
             pkce_challenge: None,
             jwks: OnceCell::new(),
@@ -57,7 +57,7 @@ impl AppleProvider {
     }
 
     pub fn with_scopes(mut self, scopes: &[&str]) -> Self {
-        self.scopes = scopes.iter().copied().map(String::from).collect();
+        self.scopes = scopes.join(" ");
         self
     }
 
@@ -116,7 +116,7 @@ impl AppleProvider {
 
     async fn get_user_from_form(
         &self,
-        form_data: Vec<(&str, &str)>,
+        form_data: &crate::provider::TokenExchangeForm<'_>,
         expected_nonce: Option<&str>,
     ) -> Result<ConnectUser, crate::error::ConnectError> {
         let token_res = self
@@ -156,7 +156,7 @@ impl AppleProvider {
     async fn decode_apple_id_token(
         &self,
         id_token_str: &str,
-        _expected_nonce: Option<&str>,
+        expected_nonce: Option<&str>,
     ) -> Result<ConnectUser, crate::error::ConnectError> {
         let mut payload: Option<Value> = None;
 
@@ -170,6 +170,9 @@ impl AppleProvider {
             validation.set_audience(&[&self.client_id]);
             validation.set_issuer(&["https://appleid.apple.com"]);
             validation.validate_exp = true;
+            if expected_nonce.is_some() {
+                validation.set_required_spec_claims(&["nonce"]);
+            }
 
             if let Ok(token_data) =
                 jsonwebtoken::decode::<Value>(id_token_str, &decoding_key, &validation)
@@ -186,6 +189,16 @@ impl AppleProvider {
                 ));
             }
         };
+
+        if let Some(nonce) = expected_nonce {
+            let token_nonce = payload["nonce"].as_str().unwrap_or("");
+            use subtle::ConstantTimeEq;
+            if !bool::from(token_nonce.as_bytes().ct_eq(nonce.as_bytes())) {
+                return Err(crate::error::ConnectError::Provider(
+                    "Apple id_token nonce mismatch".to_owned(),
+                ));
+            }
+        }
 
         Ok(ConnectUser {
             id: payload["sub"].as_str().map(String::from).ok_or_else(|| {
@@ -207,7 +220,7 @@ impl AppleProvider {
 impl Provider for AppleProvider {
     fn redirect_url(&self) -> String {
         let mut params = crate::provider::build_oauth_params(
-            String::from("https://appleid.apple.com/auth/authorize"),
+            "https://appleid.apple.com/auth/authorize",
             &self.client_id,
             &self.redirect_url,
             &self.scopes,
@@ -224,17 +237,15 @@ impl Provider for AppleProvider {
         params: crate::provider::ExchangeParams<'_>,
     ) -> Result<ConnectUser, crate::error::ConnectError> {
         let client_secret = self.generate_client_secret()?;
-        let mut form_data = vec![
-            ("client_id", self.client_id.as_str()),
-            ("client_secret", client_secret.as_str()),
-            ("code", params.auth_code),
-            ("grant_type", "authorization_code"),
-            ("redirect_uri", self.redirect_url.as_str()),
-        ];
-        if let Some(verifier) = params.code_verifier {
-            form_data.push(("code_verifier", verifier));
-        }
-        self.get_user_from_form(form_data, params.expected_nonce)
+        let form_data = crate::provider::TokenExchangeForm {
+            client_id: self.client_id.as_str(),
+            client_secret: Some(client_secret.as_str()),
+            code: params.auth_code,
+            grant_type: Some("authorization_code"),
+            redirect_uri: self.redirect_url.as_str(),
+            code_verifier: params.code_verifier,
+        };
+        self.get_user_from_form(&form_data, params.expected_nonce)
             .await
     }
 
@@ -259,7 +270,7 @@ impl Provider for AppleProvider {
         let token_res = self
             .http_client
             .post(self.token_url())
-            .form([
+            .form(&[
                 ("client_id", self.client_id.as_str()),
                 ("client_secret", client_secret.as_str()),
                 ("refresh_token", refresh_token),
