@@ -46,8 +46,6 @@ impl GithubProvider {
 
 #[async_trait]
 impl Provider for GithubProvider {
-
-
     crate::impl_standard_redirect_url!("https://github.com/login/oauth/authorize");
 
     async fn get_user(
@@ -206,9 +204,9 @@ impl Provider for GithubProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::client::{HttpClient, HttpRequest, HttpResponse};
     use serde_json::json;
     use std::sync::Arc;
-    use crate::client::{HttpClient, HttpRequest, HttpResponse};
 
     struct MockGithubClient;
     #[async_trait]
@@ -259,6 +257,9 @@ mod tests {
         assert_eq!(user.id, "1234567");
         assert_eq!(user.name, "monalisa octocat");
         assert_eq!(user.email, Some("octocat@github.com".to_string()));
-        assert_eq!(user.avatar_url, Some("https://github.com/images/error/octocat_happy.gif".to_string()));
+        assert_eq!(
+            user.avatar_url,
+            Some("https://github.com/images/error/octocat_happy.gif".to_string())
+        );
     }
 }

@@ -143,7 +143,9 @@ impl AppleProvider {
                 )
             })?;
 
-        let mut user = self.decode_apple_id_token(id_token_str, expected_nonce).await?;
+        let mut user = self
+            .decode_apple_id_token(id_token_str, expected_nonce)
+            .await?;
         user.access_token = access_token;
         user.refresh_token = token_res["refresh_token"].as_str().map(String::from);
         user.expires_in = token_res["expires_in"]
@@ -235,7 +237,8 @@ impl Provider for AppleProvider {
         if let Some(verifier) = params.code_verifier {
             form_data.push(("code_verifier", verifier));
         }
-        self.get_user_from_form(form_data, params.expected_nonce).await
+        self.get_user_from_form(form_data, params.expected_nonce)
+            .await
     }
 
     /// For Apple, `access_token` parameter should actually be the `id_token` JWT string.

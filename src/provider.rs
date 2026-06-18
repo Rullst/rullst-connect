@@ -83,7 +83,10 @@ pub trait Provider: Send + Sync {
 
     /// Exchanges the authorization code for an access token and fetches the user's profile.
     /// Returns a standardized `ConnectUser` or a `ConnectError`.
-    async fn get_user(&self, params: ExchangeParams<'_>) -> Result<ConnectUser, crate::error::ConnectError>;
+    async fn get_user(
+        &self,
+        params: ExchangeParams<'_>,
+    ) -> Result<ConnectUser, crate::error::ConnectError>;
 
     /// Fetches the user's profile using an existing access token.
     /// This bypasses the authorization code exchange step.

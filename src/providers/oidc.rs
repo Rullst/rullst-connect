@@ -255,7 +255,10 @@ impl Provider for OidcProvider {
     crate::impl_standard_redirect_url!("{}");
 
     #[tracing::instrument(skip(self, params))]
-    async fn get_user(&self, params: crate::provider::ExchangeParams<'_>) -> Result<ConnectUser, ConnectError> {
+    async fn get_user(
+        &self,
+        params: crate::provider::ExchangeParams<'_>,
+    ) -> Result<ConnectUser, ConnectError> {
         let mut form_data = vec![
             ("client_id", self.client_id.as_str()),
             ("client_secret", self.client_secret.as_str()),
@@ -266,7 +269,8 @@ impl Provider for OidcProvider {
         if let Some(verifier) = params.code_verifier {
             form_data.push(("code_verifier", verifier));
         }
-        self.get_user_from_form(form_data, params.expected_nonce).await
+        self.get_user_from_form(form_data, params.expected_nonce)
+            .await
     }
 
     #[tracing::instrument(skip(self, access_token))]

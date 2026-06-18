@@ -36,8 +36,6 @@ impl FacebookProvider {
 
 #[async_trait]
 impl Provider for FacebookProvider {
-
-
     crate::impl_standard_redirect_url!("https://www.facebook.com/v19.0/dialog/oauth");
 
     async fn get_user(

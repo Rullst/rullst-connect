@@ -208,7 +208,6 @@ impl GoogleProvider {
 
 #[async_trait]
 impl Provider for GoogleProvider {
-
     crate::impl_standard_redirect_url!("https://accounts.google.com/o/oauth2/v2/auth");
 
     async fn get_user(
@@ -225,7 +224,8 @@ impl Provider for GoogleProvider {
         if let Some(verifier) = params.code_verifier {
             form_data.push(("code_verifier", verifier));
         }
-        self.get_user_from_form(form_data, params.expected_nonce).await
+        self.get_user_from_form(form_data, params.expected_nonce)
+            .await
     }
 
     async fn get_user_from_token(
