@@ -38,7 +38,11 @@ async fn callback(auth: AuthCallback) -> impl IntoResponse {
 
     if let Some(code) = auth.code {
         let provider = get_provider();
-        match provider.get_user(&code).await {
+        let params = rullst_connect::provider::ExchangeParams {
+            auth_code: &code,
+            ..Default::default()
+        };
+        match provider.get_user(params).await {
             Ok(user) => Html(format!(
                 "<h1>Welcome, {}!</h1><img src='{}' />",
                 user.name,

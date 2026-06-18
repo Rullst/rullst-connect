@@ -308,8 +308,16 @@ impl HttpClient for ReqwestClient {
         let status = res.status().as_u16();
         tracing::debug!(status = %status, "Received HTTP response");
 
+        // Use Content-Length if available, otherwise default to 8KB to minimize reallocations
+        let capacity = res
+            .headers()
+            .get(reqwest::header::CONTENT_LENGTH)
+            .and_then(|h| h.to_str().ok())
+            .and_then(|s| s.parse::<usize>().ok())
+            .unwrap_or(8 * 1024);
+
         // Read body chunk by chunk up to 2MB to prevent memory exhaustion / DoS
-        let mut body_bytes = Vec::new();
+        let mut body_bytes = Vec::with_capacity(capacity);
         const MAX_BODY_SIZE: usize = 2 * 1024 * 1024; // 2MB limit
 
         while let Some(chunk) = res
@@ -510,5 +518,11 @@ mod tests {
             }
             _ => panic!("Expected ProviderApiError"),
         }
+    }
+
+    #[cfg(feature = "retry")]
+    #[test]
+    fn test_reqwest_client_new_with_retry() {
+        let _client = ReqwestClient::new_with_retry(3);
     }
 }

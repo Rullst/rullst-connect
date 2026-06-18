@@ -146,32 +146,17 @@ impl OidcProvider {
         self.http_client = client;
         self
     }
-}
 
-#[async_trait]
-impl Provider for OidcProvider {
-    async fn get_user_with_pkce(
+    #[tracing::instrument(skip(self, form_data))]
+    async fn get_user_from_form(
         &self,
-        auth_code: &str,
-        _code_verifier: &str,
-    ) -> Result<ConnectUser, crate::error::ConnectError> {
-        self.get_user(auth_code).await
-    }
-
-    crate::impl_standard_redirect_url!("{}");
-
-    #[tracing::instrument(skip(self, auth_code))]
-    async fn get_user(&self, auth_code: &str) -> Result<ConnectUser, ConnectError> {
+        form_data: Vec<(&str, &str)>,
+        expected_nonce: Option<&str>,
+    ) -> Result<ConnectUser, ConnectError> {
         let token_res = self
             .http_client
             .post(self.token_url())
-            .form([
-                ("client_id", self.client_id.as_str()),
-                ("client_secret", self.client_secret.as_str()),
-                ("code", auth_code),
-                ("grant_type", "authorization_code"),
-                ("redirect_uri", self.redirect_url.as_str()),
-            ])
+            .form(form_data)
             .send()
             .await?
             .error_for_status()?
@@ -208,6 +193,9 @@ impl Provider for OidcProvider {
                 validation.set_audience(&[&self.client_id]);
                 validation.set_issuer(&[&self.issuer]);
                 validation.validate_exp = true;
+                if expected_nonce.is_some() {
+                    validation.set_required_spec_claims(&["nonce"]);
+                }
 
                 let token_data =
                     jsonwebtoken::decode::<Value>(id_token, &decoding_key, &validation).map_err(
@@ -219,6 +207,15 @@ impl Provider for OidcProvider {
                         },
                     )?;
                 let payload = token_data.claims;
+
+                if let Some(nonce) = expected_nonce {
+                    if payload["nonce"].as_str() != Some(nonce) {
+                        return Err(crate::error::ConnectError::Provider(
+                            "OIDC id_token nonce mismatch".to_owned(),
+                        ));
+                    }
+                }
+
                 ConnectUser {
                     id: payload["sub"].as_str().map(String::from).ok_or_else(|| {
                         crate::error::ConnectError::Provider("Missing sub in id_token".to_owned())
@@ -240,6 +237,7 @@ impl Provider for OidcProvider {
                 ));
             }
         } else {
+            use crate::provider::Provider;
             self.get_user_from_token(access_token).await?
         };
 
@@ -249,6 +247,26 @@ impl Provider for OidcProvider {
             .or_else(|| token_res["expires_in"].as_i64().map(|v| v as u64));
 
         Ok(user)
+    }
+}
+
+#[async_trait]
+impl Provider for OidcProvider {
+    crate::impl_standard_redirect_url!("{}");
+
+    #[tracing::instrument(skip(self, params))]
+    async fn get_user(&self, params: crate::provider::ExchangeParams<'_>) -> Result<ConnectUser, ConnectError> {
+        let mut form_data = vec![
+            ("client_id", self.client_id.as_str()),
+            ("client_secret", self.client_secret.as_str()),
+            ("code", params.auth_code),
+            ("grant_type", "authorization_code"),
+            ("redirect_uri", self.redirect_url.as_str()),
+        ];
+        if let Some(verifier) = params.code_verifier {
+            form_data.push(("code_verifier", verifier));
+        }
+        self.get_user_from_form(form_data, params.expected_nonce).await
     }
 
     #[tracing::instrument(skip(self, access_token))]

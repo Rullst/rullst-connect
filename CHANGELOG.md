@@ -5,7 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [9.0.0] - 2026-06-17
+
+### Changed (Breaking)
+- **Provider API Unification**: Replaced the redundant `get_user(auth_code: &str)` and `get_user_with_pkce(...)` methods on the `Provider` trait with a single, unified `get_user(params: ExchangeParams)` method. This future-proofs the API and handles `auth_code`, `code_verifier`, and `expected_nonce` in one struct.
+
+### Security
+- **OIDC Nonce Validation**: Implemented cryptographic validation for the `nonce` claim in `GoogleProvider`, `AppleProvider`, and `OidcProvider`. The `ExchangeParams` struct now accepts an optional `expected_nonce` to prevent replay attacks during OpenID Connect flows.
+- **PKCE Enforcement**: Fixed an issue where the `code_verifier` was correctly accepted by `get_user_with_pkce` but incorrectly omitted from the final token exchange POST request across multiple providers (Cognito, LinkedIn, GitHub, OIDC, Apple, Discord, Microsoft, Facebook).
+
+### Added
+- **Unit Tests**: Added comprehensive mock client testing for the `GithubProvider` to verify mapping of GitHub profile attributes.
+- **Unit Tests**: Added initialization tests for `ReqwestClient::new_with_retry` under the `retry` feature flag.
+- **Unit Tests**: Added missing coverage for the generic `fetch_access_token` and `fetch_refresh_token` helper methods in `src/provider.rs`.
+
+### Performance
+- **Optimized JSON Parsing**: Refactored the `GoogleProvider` token exchange to deserialize directly into a strongly-typed struct (`GoogleTokenResponse`) instead of the generic `serde_json::Value`, avoiding unnecessary allocations.
 
 ## [8.0.0] - 2026-06-15
 

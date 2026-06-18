@@ -114,47 +114,16 @@ impl AppleProvider {
             })
             .await
     }
-}
 
-#[async_trait]
-impl Provider for AppleProvider {
-    async fn get_user_with_pkce(
+    async fn get_user_from_form(
         &self,
-        auth_code: &str,
-        _code_verifier: &str,
+        form_data: Vec<(&str, &str)>,
+        expected_nonce: Option<&str>,
     ) -> Result<ConnectUser, crate::error::ConnectError> {
-        self.get_user(auth_code).await
-    }
-
-    fn redirect_url(&self) -> String {
-        let mut params = crate::provider::build_oauth_params(
-            &self.client_id,
-            &self.redirect_url,
-            &self.scopes,
-            self.state.as_deref(),
-            self.pkce_challenge.as_deref(),
-        );
-        params.append_pair("response_type", "code");
-        params.append_pair("response_mode", "form_post");
-        format!(
-            "https://appleid.apple.com/auth/authorize?{}",
-            params.finish()
-        )
-    }
-
-    async fn get_user(&self, auth_code: &str) -> Result<ConnectUser, crate::error::ConnectError> {
-        let client_secret = self.generate_client_secret()?;
-
         let token_res = self
             .http_client
-            .post(self.token_url())
-            .form([
-                ("client_id", self.client_id.as_str()),
-                ("client_secret", client_secret.as_str()),
-                ("code", auth_code),
-                ("grant_type", "authorization_code"),
-                ("redirect_uri", self.redirect_url.as_str()),
-            ])
+            .post("https://appleid.apple.com/auth/token")
+            .form(form_data)
             .send()
             .await?
             .error_for_status()?
@@ -174,7 +143,7 @@ impl Provider for AppleProvider {
                 )
             })?;
 
-        let mut user = self.get_user_from_token(id_token_str).await?;
+        let mut user = self.decode_apple_id_token(id_token_str, expected_nonce).await?;
         user.access_token = access_token;
         user.refresh_token = token_res["refresh_token"].as_str().map(String::from);
         user.expires_in = token_res["expires_in"]
@@ -183,10 +152,10 @@ impl Provider for AppleProvider {
         Ok(user)
     }
 
-    /// For Apple, `access_token` parameter should actually be the `id_token` JWT string.
-    async fn get_user_from_token(
+    async fn decode_apple_id_token(
         &self,
         id_token_str: &str,
+        _expected_nonce: Option<&str>,
     ) -> Result<ConnectUser, crate::error::ConnectError> {
         let mut payload: Option<Value> = None;
 
@@ -230,6 +199,51 @@ impl Provider for AppleProvider {
             refresh_token: None,
             expires_in: None,
         })
+    }
+}
+
+#[async_trait]
+impl Provider for AppleProvider {
+    fn redirect_url(&self) -> String {
+        let mut params = crate::provider::build_oauth_params(
+            &self.client_id,
+            &self.redirect_url,
+            &self.scopes,
+            self.state.as_deref(),
+            self.pkce_challenge.as_deref(),
+        );
+        params.append_pair("response_type", "code");
+        params.append_pair("response_mode", "form_post");
+        format!(
+            "https://appleid.apple.com/auth/authorize?{}",
+            params.finish()
+        )
+    }
+
+    async fn get_user(
+        &self,
+        params: crate::provider::ExchangeParams<'_>,
+    ) -> Result<ConnectUser, crate::error::ConnectError> {
+        let client_secret = self.generate_client_secret()?;
+        let mut form_data = vec![
+            ("client_id", self.client_id.as_str()),
+            ("client_secret", client_secret.as_str()),
+            ("code", params.auth_code),
+            ("grant_type", "authorization_code"),
+            ("redirect_uri", self.redirect_url.as_str()),
+        ];
+        if let Some(verifier) = params.code_verifier {
+            form_data.push(("code_verifier", verifier));
+        }
+        self.get_user_from_form(form_data, params.expected_nonce).await
+    }
+
+    /// For Apple, `access_token` parameter should actually be the `id_token` JWT string.
+    async fn get_user_from_token(
+        &self,
+        id_token_str: &str,
+    ) -> Result<ConnectUser, crate::error::ConnectError> {
+        self.decode_apple_id_token(id_token_str, None).await
     }
 
     fn token_url(&self) -> String {

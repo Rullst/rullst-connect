@@ -6,30 +6,17 @@ use serde_json::Value;
 
 crate::define_provider!(GithubProvider, "user:email");
 
-#[async_trait]
-impl Provider for GithubProvider {
-    async fn get_user_with_pkce(
+impl GithubProvider {
+    async fn get_user_from_form(
         &self,
-        auth_code: &str,
-        _code_verifier: &str,
+        form_data: Vec<(&str, &str)>,
     ) -> Result<ConnectUser, crate::error::ConnectError> {
-        self.get_user(auth_code).await
-    }
-
-    crate::impl_standard_redirect_url!("https://github.com/login/oauth/authorize");
-
-    async fn get_user(&self, auth_code: &str) -> Result<ConnectUser, crate::error::ConnectError> {
         // 1. Exchange authorization code for access token
         let token_res = self
             .http_client
-            .post(self.token_url())
+            .post("https://github.com/login/oauth/access_token")
             .header("Accept", "application/json")
-            .form([
-                ("client_id", self.client_id.as_str()),
-                ("client_secret", self.client_secret.as_str()),
-                ("code", auth_code),
-                ("redirect_uri", self.redirect_url.as_str()),
-            ])
+            .form(form_data)
             .send()
             .await?
             .error_for_status()?
@@ -54,6 +41,29 @@ impl Provider for GithubProvider {
             .as_u64()
             .or_else(|| token_res["expires_in"].as_i64().map(|v| v as u64));
         Ok(user)
+    }
+}
+
+#[async_trait]
+impl Provider for GithubProvider {
+
+
+    crate::impl_standard_redirect_url!("https://github.com/login/oauth/authorize");
+
+    async fn get_user(
+        &self,
+        params: crate::provider::ExchangeParams<'_>,
+    ) -> Result<ConnectUser, crate::error::ConnectError> {
+        let mut form_data = vec![
+            ("client_id", self.client_id.as_str()),
+            ("client_secret", self.client_secret.as_str()),
+            ("code", params.auth_code),
+            ("redirect_uri", self.redirect_url.as_str()),
+        ];
+        if let Some(verifier) = params.code_verifier {
+            form_data.push(("code_verifier", verifier));
+        }
+        self.get_user_from_form(form_data).await
     }
 
     async fn get_user_from_token(
@@ -190,5 +200,65 @@ impl Provider for GithubProvider {
             .as_u64()
             .or_else(|| token_res["expires_in"].as_i64().map(|v| v as u64));
         Ok(user)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    use std::sync::Arc;
+    use crate::client::{HttpClient, HttpRequest, HttpResponse};
+
+    struct MockGithubClient;
+    #[async_trait]
+    impl HttpClient for MockGithubClient {
+        async fn execute(
+            &self,
+            req: HttpRequest,
+        ) -> Result<HttpResponse, crate::error::ConnectError> {
+            if req.url.contains("access_token") {
+                Ok(HttpResponse {
+                    status: 200,
+                    body: json!({
+                        "access_token": "mock_token",
+                        "token_type": "bearer",
+                        "scope": "user:email"
+                    }),
+                })
+            } else {
+                Ok(HttpResponse {
+                    status: 200,
+                    body: json!({
+                        "id": 1234567,
+                        "login": "octocat",
+                        "name": "monalisa octocat",
+                        "email": "octocat@github.com",
+                        "avatar_url": "https://github.com/images/error/octocat_happy.gif"
+                    }),
+                })
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_github_get_user() {
+        let provider = GithubProvider::new(
+            "client_id".to_string(),
+            "client_secret".to_string(),
+            "https://redirect.url".to_string(),
+        )
+        .with_http_client(Arc::new(MockGithubClient));
+
+        let params = crate::provider::ExchangeParams {
+            auth_code: "mock_code",
+            code_verifier: None,
+            expected_nonce: None,
+        };
+        let user = provider.get_user(params).await.expect("Failed to get user");
+        assert_eq!(user.id, "1234567");
+        assert_eq!(user.name, "monalisa octocat");
+        assert_eq!(user.email, Some("octocat@github.com".to_string()));
+        assert_eq!(user.avatar_url, Some("https://github.com/images/error/octocat_happy.gif".to_string()));
     }
 }

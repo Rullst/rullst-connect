@@ -88,4 +88,39 @@ mod tests {
             _ => panic!("Expected ConnectError::Json"),
         }
     }
+
+    #[test]
+    fn test_base64_error_conversion() {
+        use base64::Engine;
+        let err = base64::engine::general_purpose::STANDARD
+            .decode("invalid!base64")
+            .unwrap_err();
+        let connect_err: ConnectError = err.into();
+        match connect_err {
+            ConnectError::Base64(_) => (),
+            _ => panic!("Expected ConnectError::Base64"),
+        }
+    }
+
+    #[test]
+    fn test_jwt_error_conversion() {
+        let err = jsonwebtoken::decode_header("invalid.jwt.header").unwrap_err();
+        let connect_err: ConnectError = err.into();
+        match connect_err {
+            ConnectError::Jwt(_) => (),
+            _ => panic!("Expected ConnectError::Jwt"),
+        }
+    }
+
+    #[test]
+    fn test_time_error_conversion() {
+        let err = std::time::SystemTime::UNIX_EPOCH
+            .duration_since(std::time::SystemTime::now())
+            .unwrap_err();
+        let connect_err: ConnectError = err.into();
+        match connect_err {
+            ConnectError::Time(_) => (),
+            _ => panic!("Expected ConnectError::Time"),
+        }
+    }
 }

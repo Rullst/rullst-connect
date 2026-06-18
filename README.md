@@ -56,7 +56,7 @@ cargo add rullst-connect
 Or manually add it to your `Cargo.toml`:
 ```toml
 [dependencies]
-rullst-connect = "8.0.0"
+rullst-connect = "9.0.0"
 tokio = { version = "1.52", features = ["full"] }
 ```
 
@@ -87,7 +87,11 @@ let url = github.redirect_url();
 When the user returns to your callback URL with a `code` query parameter, exchange it for a `ConnectUser`:
 
 ```rust
-match github.get_user(code).await {
+let params = rullst_connect::provider::ExchangeParams {
+    auth_code: code,
+    ..Default::default()
+};
+match github.get_user(params).await {
     Ok(user) => {
         println!("Welcome, {}!", user.name);
         println!("Email: {:?}", user.email);
@@ -123,7 +127,7 @@ let refreshed_user = github.refresh_token("existing_refresh_token_string").await
 println!("New Access Token: {}", refreshed_user.access_token);
 ```
 
-### 🔒 PKCE Support (v8.0.0+)
+### 🔒 PKCE Support (v9.0.0+)
 
 All providers natively support PKCE (Proof Key for Code Exchange) to mitigate authorization code interception attacks. Some providers like **X (Twitter) v2** strictly require it.
 
@@ -139,7 +143,12 @@ let (code_verifier, code_challenge) = generate_pkce();
 let auth_url = provider.with_pkce(&code_challenge).redirect_url();
 
 // 4. In the callback route, fetch the user using the saved verifier:
-let user = provider.get_user_with_pkce(&code, &code_verifier).await.unwrap();
+let params = rullst_connect::provider::ExchangeParams {
+    auth_code: &code,
+    code_verifier: Some(&code_verifier),
+    ..Default::default()
+};
+let user = provider.get_user(params).await.unwrap();
 ```
 
 ## 🧑‍💻 Full Example with Axum

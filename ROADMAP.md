@@ -1,6 +1,6 @@
 # 🗺️ rullst-connect Roadmap
 
-Welcome to the official roadmap for `rullst-connect`! The library currently supports 33 providers, dynamic token parsing, `get_user_from_token` extraction, CSRF protection (via `state`), and `scopes` customization.
+Welcome to the official roadmap for `rullst-connect`! The library currently supports 11 robust core providers, dynamic token parsing, `get_user_from_token` extraction, CSRF protection (via `state`), and `scopes` customization.
 
 For our journey towards the **`v1.0.0`** release (Enterprise Level), we have planned the following major additions which are actively being worked on:
 
@@ -50,7 +50,6 @@ For our journey towards the **`v1.0.0`** release (Enterprise Level), we have pla
 ## 🛡️ Phase 7: Bleeding-Edge Security & IoT (High Security)
 
 - **FIDO2 / WebAuthn (Passkeys):** Passwordless biometric authentication (Windows Hello, FaceID, YubiKey) natively integrated with the user sessions.
-- **Device Authorization Grant (RFC 8628):** Implement the Device Flow for CLI apps, Smart TVs, and IoT devices, expanding the library's dominance beyond just web frameworks.
 - **SCIM 2.0 Provisioning (User Sync):** Allows corporate identity providers to automatically create, update, and deactivate users in your database in real-time (System for Cross-domain Identity Management).
 - **DPoP (Demonstrating Proof-of-Possession - RFC 9449):** The bleeding-edge OAuth security standard. Binds the access token to the specific client using cryptography, making stolen tokens completely useless to attackers.
 - **JWE (JSON Web Encryption):** Full support for deeply encrypted tokens (not just signed), ensuring zero data leakage in transit for highly classified environments.

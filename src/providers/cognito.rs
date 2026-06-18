@@ -72,14 +72,6 @@ impl CognitoProvider {
 
 #[async_trait]
 impl Provider for CognitoProvider {
-    async fn get_user_with_pkce(
-        &self,
-        auth_code: &str,
-        _code_verifier: &str,
-    ) -> Result<ConnectUser, crate::error::ConnectError> {
-        self.get_user(auth_code).await
-    }
-
     fn redirect_url(&self) -> String {
         let mut params = crate::provider::build_oauth_params(
             &self.client_id,
@@ -93,23 +85,18 @@ impl Provider for CognitoProvider {
 
     async fn get_user(
         &self,
-        auth_code: &str,
+        params: crate::provider::ExchangeParams<'_>,
     ) -> Result<crate::user::ConnectUser, crate::error::ConnectError> {
-        let token = crate::provider::fetch_access_token(
+        crate::provider::exchange_and_get_user(
+            self,
             self.http_client.as_ref(),
             &self.token_url(),
             &self.client_id,
             &self.client_secret,
-            auth_code,
             &self.redirect_url,
-            None,
+            &params,
         )
-        .await?;
-
-        let mut user = self.get_user_from_token(&token.access_token).await?;
-        user.refresh_token = token.refresh_token;
-        user.expires_in = token.expires_in;
-        Ok(user)
+        .await
     }
 
     async fn get_user_from_token(&self, access_token: &str) -> Result<ConnectUser, ConnectError> {

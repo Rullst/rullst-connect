@@ -65,7 +65,11 @@ async fn callback_google(Query(query): Query<AuthRequest>) -> impl IntoResponse 
         "http://localhost:3000/auth/google/callback".to_string(),
     );
 
-    match provider.get_user(&query.code).await {
+    let params = rullst_connect::provider::ExchangeParams {
+        auth_code: &query.code,
+        ..Default::default()
+    };
+    match provider.get_user(params).await {
         Ok(user) => Html(format!(
             "<h2>Bem-vindo, {}!</h2><p>Email: {:?}</p><p>ID: {}</p><img src='{:?}'>",
             user.name, user.email, user.id, user.avatar_url
@@ -93,7 +97,11 @@ async fn callback_github(Query(query): Query<AuthRequest>) -> impl IntoResponse 
         "http://localhost:3000/auth/github/callback".to_string(),
     );
 
-    match provider.get_user(&query.code).await {
+    let params = rullst_connect::provider::ExchangeParams {
+        auth_code: &query.code,
+        ..Default::default()
+    };
+    match provider.get_user(params).await {
         Ok(user) => Html(format!(
             "<h2>Bem-vindo, {}!</h2><p>Email: {:?}</p><p>ID: {}</p><img src='{:?}'>",
             user.name, user.email, user.id, user.avatar_url

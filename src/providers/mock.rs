@@ -29,22 +29,18 @@ impl MockProvider {
 
 #[async_trait]
 impl Provider for MockProvider {
-    async fn get_user_with_pkce(
-        &self,
-        auth_code: &str,
-        _code_verifier: &str,
-    ) -> Result<ConnectUser, crate::error::ConnectError> {
-        self.get_user(auth_code).await
-    }
-    fn redirect_url(&self) -> String {
-        self.mocked_url.clone()
-    }
-
     fn token_url(&self) -> String {
         "https://mock.provider/token".to_string()
     }
 
-    async fn get_user(&self, _auth_code: &str) -> Result<ConnectUser, crate::error::ConnectError> {
+    fn redirect_url(&self) -> String {
+        self.mocked_url.clone()
+    }
+
+    async fn get_user(
+        &self,
+        _params: crate::provider::ExchangeParams<'_>,
+    ) -> Result<crate::user::ConnectUser, crate::error::ConnectError> {
         Ok(self.mocked_user.clone())
     }
 

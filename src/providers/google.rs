@@ -19,6 +19,14 @@ pub struct GoogleProvider {
     pub(crate) jwks: OnceCell<jsonwebtoken::jwk::JwkSet>,
 }
 
+#[derive(serde::Deserialize)]
+struct GoogleTokenResponse {
+    access_token: String,
+    id_token: Option<String>,
+    refresh_token: Option<String>,
+    expires_in: Option<u64>,
+}
+
 impl GoogleProvider {
     pub fn new(client_id: String, client_secret: String, redirect_url: String) -> Self {
         debug_assert!(
@@ -95,43 +103,26 @@ impl GoogleProvider {
             })
             .await
     }
-}
 
-#[async_trait]
-impl Provider for GoogleProvider {
-    async fn get_user_with_pkce(
+    async fn get_user_from_form(
         &self,
-        auth_code: &str,
-        _code_verifier: &str,
+        form_data: Vec<(&str, &str)>,
+        expected_nonce: Option<&str>,
     ) -> Result<ConnectUser, crate::error::ConnectError> {
-        self.get_user(auth_code).await
-    }
-
-    crate::impl_standard_redirect_url!("https://accounts.google.com/o/oauth2/v2/auth");
-
-    async fn get_user(&self, auth_code: &str) -> Result<ConnectUser, crate::error::ConnectError> {
         // Exchange code for token
         let token_res = self
             .http_client
-            .post(self.token_url())
-            .form([
-                ("client_id", self.client_id.as_str()),
-                ("client_secret", self.client_secret.as_str()),
-                ("code", auth_code),
-                ("grant_type", "authorization_code"),
-                ("redirect_uri", self.redirect_url.as_str()),
-            ])
+            .post("https://oauth2.googleapis.com/token")
+            .form(form_data)
             .send()
             .await?
             .error_for_status()?
-            .json::<Value>()
+            .json::<GoogleTokenResponse>()
             .await?;
 
-        let access_token = token_res["access_token"].as_str().ok_or_else(|| {
-            crate::error::ConnectError::Token("Failed to get access_token".to_owned())
-        })?;
+        let access_token = token_res.access_token.clone();
 
-        let mut user = if let Some(id_token) = token_res["id_token"].as_str() {
+        let mut user = if let Some(id_token) = &token_res.id_token {
             // Secure OIDC: Verify the signature of Google's id_token
             let header = jsonwebtoken::decode_header(id_token).map_err(|e| {
                 crate::error::ConnectError::Provider(format!(
@@ -159,6 +150,9 @@ impl Provider for GoogleProvider {
                 validation.set_audience(&[&self.client_id]);
                 validation.set_issuer(&["https://accounts.google.com", "accounts.google.com"]);
                 validation.validate_exp = true;
+                if expected_nonce.is_some() {
+                    validation.set_required_spec_claims(&["nonce"]);
+                }
 
                 let token_data =
                     jsonwebtoken::decode::<Value>(id_token, &decoding_key, &validation).map_err(
@@ -171,6 +165,15 @@ impl Provider for GoogleProvider {
                     )?;
 
                 let p = token_data.claims;
+
+                if let Some(nonce) = expected_nonce {
+                    if p["nonce"].as_str() != Some(nonce) {
+                        return Err(crate::error::ConnectError::Provider(
+                            "Google id_token nonce mismatch".to_owned(),
+                        ));
+                    }
+                }
+
                 ConnectUser {
                     id: p["sub"].as_str().map(String::from).ok_or_else(|| {
                         crate::error::ConnectError::Provider(
@@ -194,14 +197,35 @@ impl Provider for GoogleProvider {
                 ));
             }
         } else {
-            self.get_user_from_token(access_token).await?
+            self.get_user_from_token(&access_token).await?
         };
 
-        user.refresh_token = token_res["refresh_token"].as_str().map(String::from);
-        user.expires_in = token_res["expires_in"]
-            .as_u64()
-            .or_else(|| token_res["expires_in"].as_i64().map(|v| v as u64));
+        user.refresh_token = token_res.refresh_token;
+        user.expires_in = token_res.expires_in;
         Ok(user)
+    }
+}
+
+#[async_trait]
+impl Provider for GoogleProvider {
+
+    crate::impl_standard_redirect_url!("https://accounts.google.com/o/oauth2/v2/auth");
+
+    async fn get_user(
+        &self,
+        params: crate::provider::ExchangeParams<'_>,
+    ) -> Result<ConnectUser, crate::error::ConnectError> {
+        let mut form_data = vec![
+            ("client_id", self.client_id.as_str()),
+            ("client_secret", self.client_secret.as_str()),
+            ("code", params.auth_code),
+            ("grant_type", "authorization_code"),
+            ("redirect_uri", self.redirect_url.as_str()),
+        ];
+        if let Some(verifier) = params.code_verifier {
+            form_data.push(("code_verifier", verifier));
+        }
+        self.get_user_from_form(form_data, params.expected_nonce).await
     }
 
     async fn get_user_from_token(

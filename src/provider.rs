@@ -30,6 +30,14 @@ pub fn build_oauth_params<'a>(
     params
 }
 
+/// Parameters for exchanging an authorization code for an access token.
+#[derive(Debug, Default, Clone)]
+pub struct ExchangeParams<'a> {
+    pub auth_code: &'a str,
+    pub code_verifier: Option<&'a str>,
+    pub expected_nonce: Option<&'a str>,
+}
+
 /// The core trait implemented by all OAuth2 providers in Rullst Connect.
 #[async_trait]
 pub trait Provider: Send + Sync {
@@ -75,15 +83,7 @@ pub trait Provider: Send + Sync {
 
     /// Exchanges the authorization code for an access token and fetches the user's profile.
     /// Returns a standardized `ConnectUser` or a `ConnectError`.
-    async fn get_user(&self, auth_code: &str) -> Result<ConnectUser, crate::error::ConnectError>;
-
-    /// Exchanges the authorization code for an access token using a PKCE `code_verifier`.
-    /// Fallbacks to standard `get_user` by default. Must be overridden by PKCE-enforcing providers.
-    async fn get_user_with_pkce(
-        &self,
-        auth_code: &str,
-        code_verifier: &str,
-    ) -> Result<ConnectUser, crate::error::ConnectError>;
+    async fn get_user(&self, params: ExchangeParams<'_>) -> Result<ConnectUser, crate::error::ConnectError>;
 
     /// Fetches the user's profile using an existing access token.
     /// This bypasses the authorization code exchange step.
@@ -257,9 +257,8 @@ pub async fn exchange_and_get_user<P>(
     token_url: &str,
     client_id: &str,
     client_secret: &str,
-    auth_code: &str,
     redirect_url: &str,
-    code_verifier: Option<&str>,
+    params: &ExchangeParams<'_>,
 ) -> Result<ConnectUser, crate::error::ConnectError>
 where
     P: Provider + ?Sized,
@@ -269,9 +268,9 @@ where
         token_url,
         client_id,
         client_secret,
-        auth_code,
+        params.auth_code,
         redirect_url,
-        code_verifier,
+        params.code_verifier,
     )
     .await?;
 
@@ -315,13 +314,6 @@ mod tests {
 
     #[async_trait]
     impl Provider for DummyProvider {
-        async fn get_user_with_pkce(
-            &self,
-            auth_code: &str,
-            _code_verifier: &str,
-        ) -> Result<ConnectUser, crate::error::ConnectError> {
-            self.get_user(auth_code).await
-        }
         fn redirect_url(&self) -> String {
             self.base_url.clone()
         }
@@ -330,7 +322,7 @@ mod tests {
             "".to_string()
         }
 
-        async fn get_user(&self, _auth_code: &str) -> Result<ConnectUser, ConnectError> {
+        async fn get_user(&self, _params: ExchangeParams<'_>) -> Result<ConnectUser, ConnectError> {
             unimplemented!()
         }
 
@@ -474,5 +466,71 @@ mod tests {
         assert!(query.contains("state=state123"));
         assert!(query.contains("code_challenge=pkce_challenge"));
         assert!(query.contains("code_challenge_method=S256"));
+    }
+
+    struct MockFetchClient;
+    #[async_trait]
+    impl crate::client::HttpClient for MockFetchClient {
+        async fn execute(
+            &self,
+            req: crate::client::HttpRequest,
+        ) -> Result<crate::client::HttpResponse, crate::error::ConnectError> {
+            if req.url.contains("error") {
+                Ok(crate::client::HttpResponse {
+                    status: 400,
+                    body: serde_json::json!({
+                        "error": "invalid_request",
+                        "error_description": "Test error"
+                    }),
+                })
+            } else {
+                Ok(crate::client::HttpResponse {
+                    status: 200,
+                    body: serde_json::json!({
+                        "access_token": "mock_access",
+                        "refresh_token": "mock_refresh",
+                        "expires_in": 3600
+                    }),
+                })
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_fetch_access_token() {
+        let client = MockFetchClient;
+        let res = fetch_access_token(
+            &client,
+            "https://example.com/token",
+            "client_id",
+            "client_secret",
+            "auth_code",
+            "https://redirect",
+            Some("verifier"),
+        )
+        .await
+        .expect("Failed to fetch access token");
+
+        assert_eq!(res.access_token, "mock_access");
+        assert_eq!(res.refresh_token.as_deref(), Some("mock_refresh"));
+        assert_eq!(res.expires_in, Some(3600));
+    }
+
+    #[tokio::test]
+    async fn test_fetch_refresh_token() {
+        let client = MockFetchClient;
+        let res = fetch_refresh_token(
+            &client,
+            "https://example.com/token",
+            "client_id",
+            "client_secret",
+            "mock_refresh",
+        )
+        .await
+        .expect("Failed to fetch refresh token");
+
+        assert_eq!(res.access_token, "mock_access");
+        assert_eq!(res.refresh_token.as_deref(), Some("mock_refresh"));
+        assert_eq!(res.expires_in, Some(3600));
     }
 }

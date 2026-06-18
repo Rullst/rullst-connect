@@ -6,28 +6,15 @@ use serde_json::Value;
 
 crate::define_provider!(FacebookProvider, "email", "public_profile");
 
-#[async_trait]
-impl Provider for FacebookProvider {
-    async fn get_user_with_pkce(
+impl FacebookProvider {
+    async fn get_user_from_form(
         &self,
-        auth_code: &str,
-        _code_verifier: &str,
+        form_data: Vec<(&str, &str)>,
     ) -> Result<ConnectUser, crate::error::ConnectError> {
-        self.get_user(auth_code).await
-    }
-
-    crate::impl_standard_redirect_url!("https://www.facebook.com/v19.0/dialog/oauth");
-
-    async fn get_user(&self, auth_code: &str) -> Result<ConnectUser, crate::error::ConnectError> {
         let token_res = self
             .http_client
             .post(self.token_url())
-            .form([
-                ("client_id", self.client_id.as_str()),
-                ("client_secret", self.client_secret.as_str()),
-                ("code", auth_code),
-                ("redirect_uri", self.redirect_url.as_str()),
-            ])
+            .form(form_data)
             .send()
             .await?
             .error_for_status()?
@@ -44,6 +31,29 @@ impl Provider for FacebookProvider {
             .as_u64()
             .or_else(|| token_res["expires_in"].as_i64().map(|v| v as u64));
         Ok(user)
+    }
+}
+
+#[async_trait]
+impl Provider for FacebookProvider {
+
+
+    crate::impl_standard_redirect_url!("https://www.facebook.com/v19.0/dialog/oauth");
+
+    async fn get_user(
+        &self,
+        params: crate::provider::ExchangeParams<'_>,
+    ) -> Result<ConnectUser, crate::error::ConnectError> {
+        let mut form_data = vec![
+            ("client_id", self.client_id.as_str()),
+            ("client_secret", self.client_secret.as_str()),
+            ("code", params.auth_code),
+            ("redirect_uri", self.redirect_url.as_str()),
+        ];
+        if let Some(verifier) = params.code_verifier {
+            form_data.push(("code_verifier", verifier));
+        }
+        self.get_user_from_form(form_data).await
     }
 
     async fn get_user_from_token(

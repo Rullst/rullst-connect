@@ -11,44 +11,20 @@ crate::define_provider!(XProvider, "users.read", "tweet.read");
 impl Provider for XProvider {
     crate::impl_standard_redirect_url!("https://twitter.com/i/oauth2/authorize");
 
-    async fn get_user(&self, _auth_code: &str) -> Result<ConnectUser, ConnectError> {
-        let _ = &self.client_secret;
-        Err(crate::error::ConnectError::Provider(
-            "X (Twitter) requires PKCE. Use get_user_with_pkce instead.".to_string(),
-        ))
-    }
-
-    async fn get_user_with_pkce(
+    async fn get_user(
         &self,
-        auth_code: &str,
-        code_verifier: &str,
-    ) -> Result<ConnectUser, ConnectError> {
-        let token_res = self
-            .http_client
-            .post(self.token_url())
-            .form([
-                ("grant_type", "authorization_code"),
-                ("client_id", self.client_id.as_str()),
-                ("code", auth_code),
-                ("redirect_uri", self.redirect_url.as_str()),
-                ("code_verifier", code_verifier),
-            ])
-            .send()
-            .await?
-            .error_for_status()?
-            .json::<Value>()
-            .await?;
-
-        let access_token = token_res["access_token"]
-            .as_str()
-            .ok_or_else(|| ConnectError::Token("Failed to get access_token".to_string()))?;
-
-        let mut user = self.get_user_from_token(access_token).await?;
-        user.refresh_token = token_res["refresh_token"].as_str().map(String::from);
-        user.expires_in = token_res["expires_in"]
-            .as_u64()
-            .or_else(|| token_res["expires_in"].as_i64().map(|v| v as u64));
-        Ok(user)
+        params: crate::provider::ExchangeParams<'_>,
+    ) -> Result<crate::user::ConnectUser, crate::error::ConnectError> {
+        crate::provider::exchange_and_get_user(
+            self,
+            self.http_client.as_ref(),
+            &self.token_url(),
+            &self.client_id,
+            &self.client_secret,
+            &self.redirect_url,
+            &params,
+        )
+        .await
     }
 
     async fn get_user_from_token(&self, access_token: &str) -> Result<ConnectUser, ConnectError> {

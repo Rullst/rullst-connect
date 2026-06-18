@@ -74,7 +74,11 @@ async fn test_github_get_user_success() {
     .with_http_client(intercept_client);
 
     // 4. Perform the full get_user flow!
-    let user = provider.get_user("fake_auth_code_999").await.unwrap();
+    let params = rullst_connect::provider::ExchangeParams {
+        auth_code: "fake_auth_code_999",
+        ..Default::default()
+    };
+    let user = provider.get_user(params).await.unwrap();
 
     assert_eq!(user.id, "123456");
     assert_eq!(user.name, "The Octocat");
@@ -113,7 +117,11 @@ async fn test_github_token_error() {
     )
     .with_http_client(intercept_client);
 
-    let err = provider.get_user("bad_code").await.unwrap_err();
+    let params = rullst_connect::provider::ExchangeParams {
+        auth_code: "bad_code",
+        ..Default::default()
+    };
+    let err = provider.get_user(params).await.unwrap_err();
 
     assert!(matches!(
         err,
@@ -207,7 +215,11 @@ async fn test_github_get_user_missing_access_token() {
     )
     .with_http_client(intercept_client);
 
-    let err = provider.get_user("some_code").await.unwrap_err();
+    let params = rullst_connect::provider::ExchangeParams {
+        auth_code: "some_code",
+        ..Default::default()
+    };
+    let err = provider.get_user(params).await.unwrap_err();
     assert!(matches!(
         err,
         ConnectError::Token(ref message)
@@ -246,7 +258,11 @@ async fn test_github_get_user_missing_id() {
     )
     .with_http_client(intercept_client);
 
-    let err = provider.get_user("some_code").await.unwrap_err();
+    let params = rullst_connect::provider::ExchangeParams {
+        auth_code: "some_code",
+        ..Default::default()
+    };
+    let err = provider.get_user(params).await.unwrap_err();
     assert!(matches!(
         err,
         ConnectError::Provider(ref message)
