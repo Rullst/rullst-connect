@@ -235,10 +235,10 @@ impl HttpClient for ReqwestClient {
                 builder = builder.basic_auth(user, pass.as_deref());
             }
 
-            if let Some(f) = &req.form {
-                builder = builder.body(f.clone()).header(reqwest::header::CONTENT_TYPE, "application/x-www-form-urlencoded");
-            } else if let Some(j) = &req.json {
-                builder = builder.json(j);
+            if let Some(f) = req.form {
+                builder = builder.body(f).header(reqwest::header::CONTENT_TYPE, "application/x-www-form-urlencoded");
+            } else if let Some(j) = req.json {
+                builder = builder.json(&j);
             }
 
             builder
@@ -272,15 +272,15 @@ impl HttpClient for ReqwestClient {
                 builder = builder.basic_auth(user, pass.as_deref());
             }
 
-            if let Some(body) = &req.form {
+            if let Some(body) = req.form {
                 // reqwest_middleware::RequestBuilder doesn't have `.form()`, we set body and headers manually
-                builder = builder.body(body.clone()).header(
+                builder = builder.body(body).header(
                     reqwest::header::CONTENT_TYPE,
                     "application/x-www-form-urlencoded",
                 );
-            } else if let Some(j) = &req.json {
+            } else if let Some(j) = req.json {
                 // reqwest_middleware::RequestBuilder doesn't have `.json()`, we set body and headers manually
-                let body = serde_json::to_string(j).unwrap_or_default();
+                let body = serde_json::to_string(&j).unwrap_or_default();
                 builder = builder
                     .body(body)
                     .header(reqwest::header::CONTENT_TYPE, "application/json");

@@ -140,7 +140,13 @@ impl GoogleProvider {
                     ))
                 })?;
 
-                let mut validation = jsonwebtoken::Validation::new(header.alg);
+                let alg = match header.alg {
+                    jsonwebtoken::Algorithm::HS256
+                    | jsonwebtoken::Algorithm::HS384
+                    | jsonwebtoken::Algorithm::HS512 => jsonwebtoken::Algorithm::RS256,
+                    other => other,
+                };
+                let mut validation = jsonwebtoken::Validation::new(alg);
                 validation.set_audience(&[&self.client_id]);
                 validation.set_issuer(&["https://accounts.google.com", "accounts.google.com"]);
                 validation.validate_exp = true;

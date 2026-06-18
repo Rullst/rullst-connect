@@ -185,7 +185,13 @@ impl OidcProvider {
                         e
                     ))
                 })?;
-                let mut validation = jsonwebtoken::Validation::new(header.alg);
+                let alg = match header.alg {
+                    jsonwebtoken::Algorithm::HS256
+                    | jsonwebtoken::Algorithm::HS384
+                    | jsonwebtoken::Algorithm::HS512 => jsonwebtoken::Algorithm::RS256,
+                    other => other,
+                };
+                let mut validation = jsonwebtoken::Validation::new(alg);
                 validation.set_audience(&[&self.client_id]);
                 validation.set_issuer(&[&self.issuer]);
                 validation.validate_exp = true;
@@ -265,14 +271,8 @@ impl Provider for OidcProvider {
             redirect_uri: self.redirect_url.as_str(),
             code_verifier: params.code_verifier,
         };
-        crate::provider::exchange_and_get_user(
-            self,
-            self.http_client.as_ref(),
-            &self.token_url(),
-            &form_data,
-            params.expected_nonce,
-        )
-        .await
+        self.get_user_from_form(&form_data, params.expected_nonce)
+            .await
     }
 
     #[tracing::instrument(skip(self, access_token))]
