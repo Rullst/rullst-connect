@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.0.1] - 2026-06-18
+
+### Security
+- **Hardcoded Credentials**: Removed hardcoded dummy credentials from Axum examples (`axum_example.rs` and `axum_server.rs`), replacing them with environment variable reads (`std::env::var`) to promote secure configuration practices.
+
+### Performance & Maintenance
+- **Form Allocation Optimization**: Replaced array slicing `.form(&[...])` with standard arrays `.form([...])` across all providers to reduce unnecessary borrowing overhead.
+- **Header Construction**: Optimized `HeaderMap` construction in `ReqwestClient` to safely use `try_from` without panicking on invalid headers.
+- **Redundant Clones**: Removed unnecessary `.clone()` calls on the access token in the `GoogleProvider` token exchange.
+- **Macro Hygiene**: Fixed macro hygiene issue by properly scoping `#[allow(dead_code)]` in the `define_provider` macro to avoid triggering `unused_attributes` warnings in recent Rust compilers.
+
+### Added
+- **Unit Tests**: Added robust tests for `ConnectUser` serialization and deserialization.
+- **Unit Tests**: Added tests for the `Connect::driver` dynamic provider factory method.
+- **Unit Tests**: Added endpoints tests for the `mock_router` discovery and userinfo handlers in `mock_idp.rs`.
+
 ## [9.0.0] - 2026-06-17
 
 ### Changed (Breaking)

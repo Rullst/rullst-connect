@@ -228,8 +228,8 @@ impl HttpClient for ReqwestClient {
                 let mut headers = reqwest::header::HeaderMap::with_capacity(req.headers.len());
                 for (k, v) in &req.headers {
                     if let (Ok(name), Ok(value)) = (
-                        reqwest::header::HeaderName::from_bytes(k.as_bytes()),
-                        reqwest::header::HeaderValue::from_str(v),
+                        reqwest::header::HeaderName::try_from(k.as_str()),
+                        reqwest::header::HeaderValue::try_from(v.as_str()),
                     ) {
                         headers.insert(name, value);
                     }
@@ -265,8 +265,8 @@ impl HttpClient for ReqwestClient {
                 let mut headers = reqwest::header::HeaderMap::with_capacity(req.headers.len());
                 for (k, v) in &req.headers {
                     if let (Ok(name), Ok(value)) = (
-                        reqwest::header::HeaderName::from_bytes(k.as_bytes()),
-                        reqwest::header::HeaderValue::from_str(v),
+                        reqwest::header::HeaderName::try_from(k.as_str()),
+                        reqwest::header::HeaderValue::try_from(v.as_str()),
                     ) {
                         headers.insert(name, value);
                     }

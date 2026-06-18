@@ -141,4 +141,52 @@ mod tests {
 
         assert_eq!(json["error"], "invalid_grant");
     }
+
+    #[tokio::test]
+    async fn test_mock_router_discovery() {
+        use axum::{body::Body, http::Request};
+        use tower::ServiceExt;
+
+        let app = mock_router();
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/.well-known/openid-configuration")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), axum::http::StatusCode::OK);
+        
+        let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert_eq!(json["issuer"], "http://localhost:8080");
+        assert_eq!(json["authorization_endpoint"], "http://localhost:8080/auth");
+    }
+
+    #[tokio::test]
+    async fn test_mock_router_userinfo() {
+        use axum::{body::Body, http::Request};
+        use tower::ServiceExt;
+
+        let app = mock_router();
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/userinfo")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), axum::http::StatusCode::OK);
+        
+        let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert_eq!(json["sub"], "mock_user_999");
+        assert_eq!(json["email"], "mock@example.com");
+    }
 }

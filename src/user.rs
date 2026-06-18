@@ -55,3 +55,37 @@ pub struct DeviceAuthorizationResponse {
     pub expires_in: u64,
     pub interval: Option<u64>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn test_connect_user_serialization() {
+        let user = ConnectUser {
+            id: "123".to_string(),
+            name: "Test User".to_string(),
+            email: Some("test@example.com".to_string()),
+            email_verified: Some(true),
+            avatar_url: Some("https://example.com/avatar.png".to_string()),
+            raw_data: json!({"custom_field": "custom_value"}),
+            access_token: "access123".to_string(),
+            refresh_token: Some("refresh123".to_string()),
+            expires_in: Some(3600),
+        };
+
+        let serialized = serde_json::to_string(&user).unwrap();
+        let deserialized: ConnectUser = serde_json::from_str(&serialized).unwrap();
+
+        assert_eq!(user.id, deserialized.id);
+        assert_eq!(user.name, deserialized.name);
+        assert_eq!(user.email, deserialized.email);
+        assert_eq!(user.email_verified, deserialized.email_verified);
+        assert_eq!(user.avatar_url, deserialized.avatar_url);
+        assert_eq!(user.raw_data, deserialized.raw_data);
+        assert_eq!(user.access_token, deserialized.access_token);
+        assert_eq!(user.refresh_token, deserialized.refresh_token);
+        assert_eq!(user.expires_in, deserialized.expires_in);
+    }
+}

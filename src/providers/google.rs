@@ -120,7 +120,7 @@ impl GoogleProvider {
             .json::<GoogleTokenResponse>()
             .await?;
 
-        let access_token = token_res.access_token.clone();
+        let access_token = token_res.access_token;
 
         let mut user = if let Some(id_token) = &token_res.id_token {
             // Secure OIDC: Verify the signature of Google's id_token
@@ -187,7 +187,7 @@ impl GoogleProvider {
                         .map(|s: &str| s.replace("=s96-c", "=s400-c")),
                     email_verified: p["email_verified"].as_bool(),
                     raw_data: p,
-                    access_token: access_token.to_owned(),
+                    access_token,
                     refresh_token: None,
                     expires_in: None,
                 }

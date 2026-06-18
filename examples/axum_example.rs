@@ -57,8 +57,8 @@ async fn callback(auth: AuthCallback) -> impl IntoResponse {
 
 fn get_provider() -> GoogleProvider {
     GoogleProvider::new(
-        "your_client_id".to_string(),
-        "your_client_secret".to_string(),
+        std::env::var("GOOGLE_CLIENT_ID").unwrap_or_else(|_| "your_client_id".to_string()),
+        std::env::var("GOOGLE_CLIENT_SECRET").unwrap_or_else(|_| "your_client_secret".to_string()),
         "http://localhost:3000/callback".to_string(),
     )
 }

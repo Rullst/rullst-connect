@@ -91,3 +91,20 @@ impl Connect {
         Ok(provider)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_driver_factory() {
+        let github = Connect::driver("github", "id".to_string(), "secret".to_string(), "http://url".to_string());
+        assert!(github.is_ok());
+
+        let apple = Connect::driver("apple", "id".to_string(), "secret".to_string(), "http://url".to_string());
+        assert!(apple.is_err());
+
+        let unknown = Connect::driver("unknown", "id".to_string(), "secret".to_string(), "http://url".to_string());
+        assert!(unknown.is_err());
+    }
+}

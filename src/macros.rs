@@ -124,7 +124,7 @@ macro_rules! impl_standard_refresh_token {
 
 #[cfg(test)]
 mod tests {
-    #![allow(dead_code)]
+    #[allow(dead_code)]
     define_provider!(DummyProvider, "default_scope1", "default_scope2");
 
     #[test]

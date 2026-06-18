@@ -15,10 +15,10 @@ struct AuthRequest {
 }
 
 // Em um projeto real, isso viria de variáveis de ambiente (.env)
-const GOOGLE_CLIENT_ID: &str = "SEU_GOOGLE_CLIENT_ID";
-const GOOGLE_CLIENT_SECRET: &str = "SEU_GOOGLE_CLIENT_SECRET";
-const GITHUB_CLIENT_ID: &str = "SEU_GITHUB_CLIENT_ID";
-const GITHUB_CLIENT_SECRET: &str = "SEU_GITHUB_CLIENT_SECRET";
+fn google_client_id() -> String { std::env::var("GOOGLE_CLIENT_ID").unwrap_or_else(|_| "SEU_GOOGLE_CLIENT_ID".to_string()) }
+fn google_client_secret() -> String { std::env::var("GOOGLE_CLIENT_SECRET").unwrap_or_else(|_| "SEU_GOOGLE_CLIENT_SECRET".to_string()) }
+fn github_client_id() -> String { std::env::var("GITHUB_CLIENT_ID").unwrap_or_else(|_| "SEU_GITHUB_CLIENT_ID".to_string()) }
+fn github_client_secret() -> String { std::env::var("GITHUB_CLIENT_SECRET").unwrap_or_else(|_| "SEU_GITHUB_CLIENT_SECRET".to_string()) }
 
 #[tokio::main]
 async fn main() {
@@ -51,8 +51,8 @@ async fn index() -> Html<&'static str> {
 // ==========================================
 async fn login_google() -> Redirect {
     let provider = GoogleProvider::new(
-        GOOGLE_CLIENT_ID.to_string(),
-        GOOGLE_CLIENT_SECRET.to_string(),
+        google_client_id(),
+        google_client_secret(),
         "http://localhost:3000/auth/google/callback".to_string(),
     );
     Redirect::to(&provider.redirect_url())
@@ -60,8 +60,8 @@ async fn login_google() -> Redirect {
 
 async fn callback_google(Query(query): Query<AuthRequest>) -> impl IntoResponse {
     let provider = GoogleProvider::new(
-        GOOGLE_CLIENT_ID.to_string(),
-        GOOGLE_CLIENT_SECRET.to_string(),
+        google_client_id(),
+        google_client_secret(),
         "http://localhost:3000/auth/google/callback".to_string(),
     );
 
@@ -83,8 +83,8 @@ async fn callback_google(Query(query): Query<AuthRequest>) -> impl IntoResponse 
 // ==========================================
 async fn login_github() -> Redirect {
     let provider = GithubProvider::new(
-        GITHUB_CLIENT_ID.to_string(),
-        GITHUB_CLIENT_SECRET.to_string(),
+        github_client_id(),
+        github_client_secret(),
         "http://localhost:3000/auth/github/callback".to_string(),
     );
     Redirect::to(&provider.redirect_url())
@@ -92,8 +92,8 @@ async fn login_github() -> Redirect {
 
 async fn callback_github(Query(query): Query<AuthRequest>) -> impl IntoResponse {
     let provider = GithubProvider::new(
-        GITHUB_CLIENT_ID.to_string(),
-        GITHUB_CLIENT_SECRET.to_string(),
+        github_client_id(),
+        github_client_secret(),
         "http://localhost:3000/auth/github/callback".to_string(),
     );
 
