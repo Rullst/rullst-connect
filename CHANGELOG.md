@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [9.0.2] - Unreleased
 
 ### Performance
+- **Global Connection Pooling**: Centralized HTTP client instantiation by introducing a globally shared `reqwest::Client` (via `LazyLock`) in `src/client.rs`. This prevents each provider from creating its own isolated connection pool, dramatically reducing memory overhead, DNS lookups, and thread spawning in multi-provider environments.
 - **URL Serialization**: Optimized `redirect_url` string allocations across all providers by preventing unnecessary `format!()` concatenations and leveraging `url::form_urlencoded::Serializer::for_suffix` to safely append queries directly to the base URL without duplicate memory allocations.
 
 ## [9.0.1] - 2026-06-18

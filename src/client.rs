@@ -526,3 +526,6 @@ mod tests {
         let _client = ReqwestClient::new_with_retry(3);
     }
 }
+
+pub static DEFAULT_HTTP_CLIENT: std::sync::LazyLock<std::sync::Arc<dyn HttpClient>> =
+    std::sync::LazyLock::new(|| std::sync::Arc::new(ReqwestClient::new()));

@@ -1,4 +1,4 @@
-use crate::client::{HttpClient, HttpClientExt, ReqwestClient};
+use crate::client::{HttpClient, HttpClientExt};
 use crate::error::ConnectError;
 use crate::provider::Provider;
 use crate::user::ConnectUser;
@@ -30,7 +30,7 @@ impl OidcProvider {
         client_secret: String,
         redirect_url: String,
     ) -> Result<Self, ConnectError> {
-        let client: Arc<dyn HttpClient> = Arc::new(ReqwestClient::new());
+        let client: Arc<dyn HttpClient> = crate::client::DEFAULT_HTTP_CLIENT.clone();
         Self::discover_with_client(issuer_url, client_id, client_secret, redirect_url, client).await
     }
 

@@ -5,8 +5,6 @@ use crate::user::ConnectUser;
 use async_trait::async_trait;
 use serde_json::Value;
 
-static DEFAULT_CLIENT: ::std::sync::LazyLock<::std::sync::Arc<dyn crate::client::HttpClient>> =
-    ::std::sync::LazyLock::new(|| ::std::sync::Arc::new(crate::client::ReqwestClient::new()));
 
 pub struct CognitoProvider {
     client_id: String,
@@ -33,7 +31,7 @@ impl CognitoProvider {
             client_secret,
             redirect_url,
             domain: clean_domain,
-            http_client: DEFAULT_CLIENT.clone(),
+            http_client: crate::client::DEFAULT_HTTP_CLIENT.clone(),
             scopes: vec![
                 "openid".to_string(),
                 "profile".to_string(),

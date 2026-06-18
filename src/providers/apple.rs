@@ -8,8 +8,7 @@ use serde_json::Value;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::OnceCell;
 
-static DEFAULT_CLIENT: ::std::sync::LazyLock<::std::sync::Arc<dyn crate::client::HttpClient>> =
-    ::std::sync::LazyLock::new(|| ::std::sync::Arc::new(crate::client::ReqwestClient::new()));
+
 
 pub struct AppleProvider {
     client_id: String,
@@ -49,7 +48,7 @@ impl AppleProvider {
             key_id,
             private_key_pem,
             redirect_url,
-            http_client: DEFAULT_CLIENT.clone(),
+            http_client: crate::client::DEFAULT_HTTP_CLIENT.clone(),
             scopes: vec!["name".to_string(), "email".to_string()],
             state: None,
             pkce_challenge: None,

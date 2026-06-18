@@ -5,8 +5,6 @@ use async_trait::async_trait;
 use serde_json::Value;
 use tokio::sync::OnceCell;
 
-static DEFAULT_CLIENT: ::std::sync::LazyLock<::std::sync::Arc<dyn crate::client::HttpClient>> =
-    ::std::sync::LazyLock::new(|| ::std::sync::Arc::new(crate::client::ReqwestClient::new()));
 
 pub struct GoogleProvider {
     pub(crate) client_id: String,
@@ -46,7 +44,7 @@ impl GoogleProvider {
             client_id,
             client_secret,
             redirect_url,
-            http_client: DEFAULT_CLIENT.clone(),
+            http_client: crate::client::DEFAULT_HTTP_CLIENT.clone(),
             scopes: vec![
                 "openid".to_string(),
                 "profile".to_string(),

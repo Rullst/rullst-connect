@@ -24,13 +24,11 @@ macro_rules! define_provider {
                 assert!(!client_secret.is_empty(), "Socialite Error: client_secret cannot be empty");
                 assert!(redirect_url.starts_with("http"), "Socialite Error: redirect_url must be a valid HTTP/HTTPS URL");
 
-                static CLIENT: ::std::sync::LazyLock<::std::sync::Arc<dyn $crate::client::HttpClient>> =
-                    ::std::sync::LazyLock::new(|| ::std::sync::Arc::new($crate::client::ReqwestClient::new()));
                 Self {
                     client_id,
                     client_secret,
                     redirect_url,
-                    http_client: CLIENT.clone(),
+                    http_client: $crate::client::DEFAULT_HTTP_CLIENT.clone(),
                     scopes: vec![$($default_scope.to_owned()),*],
                     state: None,
                     pkce_challenge: None,
