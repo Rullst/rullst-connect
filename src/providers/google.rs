@@ -166,13 +166,12 @@ impl GoogleProvider {
 
                 let p = token_data.claims;
 
-                if let Some(nonce) = expected_nonce {
-                    if p["nonce"].as_str() != Some(nonce) {
+                if let Some(nonce) = expected_nonce
+                    && p["nonce"].as_str() != Some(nonce) {
                         return Err(crate::error::ConnectError::Provider(
                             "Google id_token nonce mismatch".to_owned(),
                         ));
                     }
-                }
 
                 ConnectUser {
                     id: p["sub"].as_str().map(String::from).ok_or_else(|| {

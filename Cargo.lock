@@ -2552,6 +2552,7 @@ dependencies = [
  "subtle",
  "thiserror 2.0.18",
  "tokio",
+ "tower",
  "tower-sessions",
  "tracing",
  "url",

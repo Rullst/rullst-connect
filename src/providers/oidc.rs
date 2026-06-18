@@ -208,13 +208,12 @@ impl OidcProvider {
                     )?;
                 let payload = token_data.claims;
 
-                if let Some(nonce) = expected_nonce {
-                    if payload["nonce"].as_str() != Some(nonce) {
+                if let Some(nonce) = expected_nonce
+                    && payload["nonce"].as_str() != Some(nonce) {
                         return Err(crate::error::ConnectError::Provider(
                             "OIDC id_token nonce mismatch".to_owned(),
                         ));
                     }
-                }
 
                 ConnectUser {
                     id: payload["sub"].as_str().map(String::from).ok_or_else(|| {
