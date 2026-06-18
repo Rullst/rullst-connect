@@ -75,7 +75,7 @@ mod tests {
             avatar_url: None,
             email_verified: None,
             raw_data: serde_json::json!({}),
-            access_token: "token".to_string(),
+            access_token: secrecy::SecretString::from("token".to_string()),
             refresh_token: None,
             expires_in: None,
         };

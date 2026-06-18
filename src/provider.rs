@@ -63,6 +63,8 @@ pub trait Provider: Send + Sync {
     /// It is highly recommended to use this to prevent CSRF attacks.
     fn redirect_url_with_state(&self, state: &str) -> String {
         let mut string = self.redirect_url();
+        // Pre-allocate capacity to prevent reallocation when appending query parameters
+        string.reserve(8 + state.len());
         let separator = if string.contains('?') { '&' } else { '?' };
         string.push(separator);
         let start_position = string.len();
@@ -75,6 +77,8 @@ pub trait Provider: Send + Sync {
     /// Useful for providers that enforce PKCE (like Twitter/X v2).
     fn redirect_url_with_pkce(&self, code_challenge: &str) -> String {
         let mut string = self.redirect_url();
+        // Pre-allocate capacity to prevent reallocation when appending query parameters
+        string.reserve(44 + code_challenge.len());
         let separator = if string.contains('?') { '&' } else { '?' };
         string.push(separator);
         let start_position = string.len();
@@ -87,6 +91,8 @@ pub trait Provider: Send + Sync {
     /// Returns the authorization URL with a PKCE `code_challenge` and a `state` parameter appended.
     fn redirect_url_with_pkce_and_state(&self, code_challenge: &str, state: &str) -> String {
         let mut string = self.redirect_url();
+        // Pre-allocate capacity to prevent reallocation when appending query parameters
+        string.reserve(52 + code_challenge.len() + state.len());
         let separator = if string.contains('?') { '&' } else { '?' };
         string.push(separator);
         let start_position = string.len();
@@ -273,7 +279,7 @@ where
     .await?;
 
     let mut user = provider.get_user_from_token(&token.access_token).await?;
-    user.refresh_token = token.refresh_token;
+    user.refresh_token = token.refresh_token.map(secrecy::SecretString::from);
     user.expires_in = token.expires_in;
     Ok(user)
 }
@@ -284,17 +290,17 @@ pub async fn refresh_and_get_user<P>(
     client: &dyn crate::client::HttpClient,
     token_url: &str,
     client_id: &str,
-    client_secret: &str,
+    client_secret: &secrecy::SecretString,
     refresh_token: &str,
 ) -> Result<ConnectUser, crate::error::ConnectError>
 where
     P: Provider + ?Sized,
 {
     let token =
-        fetch_refresh_token(client, token_url, client_id, client_secret, refresh_token).await?;
+        fetch_refresh_token(client, token_url, client_id, secrecy::ExposeSecret::expose_secret(client_secret), refresh_token).await?;
 
     let mut user = provider.get_user_from_token(&token.access_token).await?;
-    user.refresh_token = token.refresh_token;
+    user.refresh_token = token.refresh_token.map(secrecy::SecretString::from);
     user.expires_in = token.expires_in;
     Ok(user)
 }

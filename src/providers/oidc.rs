@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 pub struct OidcProvider {
     pub(crate) client_id: String,
-    pub(crate) client_secret: String,
+    pub(crate) client_secret: secrecy::SecretString,
     pub(crate) redirect_url: String,
     pub(crate) http_client: Arc<dyn HttpClient>,
     pub(crate) scopes: String,
@@ -18,7 +18,8 @@ pub struct OidcProvider {
     pub authorization_endpoint: String,
     pub token_endpoint: String,
     pub userinfo_endpoint: String,
-    pub(crate) jwks: jsonwebtoken::jwk::JwkSet,
+    pub(crate) jwks_uri: String,
+    pub(crate) jwks: tokio::sync::OnceCell<jsonwebtoken::jwk::JwkSet>,
     pub issuer: String,
 }
 
@@ -43,6 +44,27 @@ impl OidcProvider {
         redirect_url: String,
         client: Arc<dyn HttpClient>,
     ) -> Result<Self, ConnectError> {
+        if !issuer_url.starts_with("http") {
+            return Err(crate::error::ConnectError::Provider(
+                "OIDC Error: issuer_url must be a valid HTTP/HTTPS URL".to_string(),
+            ));
+        }
+        if !redirect_url.starts_with("http") {
+            return Err(crate::error::ConnectError::Provider(
+                "OIDC Error: redirect_url must be a valid HTTP/HTTPS URL".to_string(),
+            ));
+        }
+        if client_id.is_empty() {
+            return Err(crate::error::ConnectError::Provider(
+                "OIDC Error: client_id cannot be empty".to_string(),
+            ));
+        }
+        if client_secret.is_empty() {
+            return Err(crate::error::ConnectError::Provider(
+                "OIDC Error: client_secret cannot be empty".to_string(),
+            ));
+        }
+
         let well_known_url = if issuer_url.ends_with('/') {
             format!("{}.well-known/openid-configuration", issuer_url)
         } else {
@@ -98,18 +120,9 @@ impl OidcProvider {
             })?
             .to_string();
 
-        // Fetch the JWKS public keys immediately
-        let jwks = client
-            .get(&jwks_uri)
-            .send()
-            .await?
-            .error_for_status()?
-            .json::<jsonwebtoken::jwk::JwkSet>()
-            .await?;
-
         Ok(Self {
             client_id,
-            client_secret,
+            client_secret: client_secret.into(),
             redirect_url,
             http_client: client,
             scopes: "openid profile email".to_string(),
@@ -118,7 +131,8 @@ impl OidcProvider {
             authorization_endpoint,
             token_endpoint,
             userinfo_endpoint,
-            jwks,
+            jwks_uri,
+            jwks: tokio::sync::OnceCell::new(),
             issuer,
         })
     }
@@ -141,6 +155,22 @@ impl OidcProvider {
     pub fn with_http_client(mut self, client: Arc<dyn HttpClient>) -> Self {
         self.http_client = client;
         self
+    }
+
+    async fn get_jwks(&self) -> Result<&jsonwebtoken::jwk::JwkSet, ConnectError> {
+        self.jwks
+            .get_or_try_init(|| async {
+                let res = self
+                    .http_client
+                    .get(&self.jwks_uri)
+                    .send()
+                    .await?
+                    .error_for_status()?
+                    .json::<jsonwebtoken::jwk::JwkSet>()
+                    .await?;
+                Ok(res)
+            })
+            .await
     }
 
     #[tracing::instrument(skip(self, form_data))]
@@ -173,7 +203,8 @@ impl OidcProvider {
             })?;
 
             if let Some(kid) = header.kid.as_ref() {
-                let jwk = self.jwks.find(kid).ok_or_else(|| {
+                let jwks = self.get_jwks().await?;
+                let jwk = jwks.find(kid).ok_or_else(|| {
                     crate::error::ConnectError::Provider(format!(
                         "OIDC JWK with key ID '{}' not found",
                         kid
@@ -213,7 +244,7 @@ impl OidcProvider {
                 if let Some(nonce) = expected_nonce {
                     let token_nonce = payload["nonce"].as_str().unwrap_or("");
                     use subtle::ConstantTimeEq;
-                    if !bool::from(token_nonce.as_bytes().ct_eq(nonce.as_bytes())) {
+                    if token_nonce.len() != nonce.len() || !bool::from(token_nonce.as_bytes().ct_eq(nonce.as_bytes())) {
                         return Err(crate::error::ConnectError::Provider(
                             "OIDC id_token nonce mismatch".to_owned(),
                         ));
@@ -231,7 +262,7 @@ impl OidcProvider {
                     avatar_url: payload["picture"].as_str().map(String::from),
                     email_verified: payload["email_verified"].as_bool(),
                     raw_data: payload,
-                    access_token: access_token.to_owned(),
+                    access_token: secrecy::SecretString::from(access_token.to_owned()),
                     refresh_token: None,
                     expires_in: None,
                 }
@@ -245,7 +276,7 @@ impl OidcProvider {
             self.get_user_from_token(access_token).await?
         };
 
-        user.refresh_token = token_res["refresh_token"].as_str().map(String::from);
+        user.refresh_token = token_res["refresh_token"].as_str().map(|s| secrecy::SecretString::from(s.to_string()));
         user.expires_in = token_res["expires_in"]
             .as_u64()
             .or_else(|| token_res["expires_in"].as_i64().map(|v| v as u64));
@@ -265,7 +296,7 @@ impl Provider for OidcProvider {
     ) -> Result<ConnectUser, ConnectError> {
         let form_data = crate::provider::TokenExchangeForm {
             client_id: self.client_id.as_str(),
-            client_secret: Some(self.client_secret.as_str()),
+            client_secret: Some(secrecy::ExposeSecret::expose_secret(&self.client_secret)),
             code: params.auth_code,
             grant_type: Some("authorization_code"),
             redirect_uri: self.redirect_url.as_str(),
@@ -298,7 +329,7 @@ impl Provider for OidcProvider {
             avatar_url: user_res["picture"].as_str().map(String::from),
             email_verified: user_res["email_verified"].as_bool(),
             raw_data: user_res,
-            access_token: access_token.to_owned(),
+            access_token: secrecy::SecretString::from(access_token.to_owned()),
             refresh_token: None,
             expires_in: None,
         })
@@ -374,11 +405,11 @@ mod tests {
         .expect("OIDC discovery failed");
 
         let urls = mock_client.captured_urls.lock().await;
+        assert_eq!(urls.len(), 1);
         assert_eq!(
             urls[0],
             "https://issuer.com/.well-known/openid-configuration"
         );
-        assert_eq!(urls[1], "https://auth.com/jwks");
     }
 
     #[tokio::test]
@@ -409,11 +440,11 @@ mod tests {
         .expect("OIDC discovery failed");
 
         let urls = mock_client.captured_urls.lock().await;
+        assert_eq!(urls.len(), 1);
         assert_eq!(
             urls[0],
             "https://issuer.com/.well-known/openid-configuration"
         );
-        assert_eq!(urls[1], "https://auth.com/jwks");
     }
 
     #[tokio::test]

@@ -84,7 +84,7 @@ impl AppleProvider {
         let claims = AppleClaims {
             iss: &self.team_id,
             iat: now,
-            exp: now + 86400 * 30, // 30 days expiration
+            exp: now + 300, // 5 minutes expiration (short-lived credential)
             aud: "https://appleid.apple.com",
             sub: &self.client_id,
         };
@@ -145,8 +145,8 @@ impl AppleProvider {
         let mut user = self
             .decode_apple_id_token(id_token_str, expected_nonce)
             .await?;
-        user.access_token = access_token;
-        user.refresh_token = token_res["refresh_token"].as_str().map(String::from);
+        user.access_token = access_token.into();
+        user.refresh_token = token_res["refresh_token"].as_str().map(|s| secrecy::SecretString::from(s.to_string()));
         user.expires_in = token_res["expires_in"]
             .as_u64()
             .or_else(|| token_res["expires_in"].as_i64().map(|v| v as u64));
@@ -199,7 +199,7 @@ impl AppleProvider {
         if let Some(nonce) = expected_nonce {
             let token_nonce = payload["nonce"].as_str().unwrap_or("");
             use subtle::ConstantTimeEq;
-            if !bool::from(token_nonce.as_bytes().ct_eq(nonce.as_bytes())) {
+            if token_nonce.len() != nonce.len() || !bool::from(token_nonce.as_bytes().ct_eq(nonce.as_bytes())) {
                 return Err(crate::error::ConnectError::Provider(
                     "Apple id_token nonce mismatch".to_owned(),
                 ));
@@ -215,7 +215,7 @@ impl AppleProvider {
             avatar_url: None, // Apple does not provide avatars
             email_verified: None,
             raw_data: payload,
-            access_token: id_token_str.to_string(),
+            access_token: id_token_str.to_string().into(),
             refresh_token: None,
             expires_in: None,
         })
@@ -303,7 +303,7 @@ impl Provider for AppleProvider {
         })?;
 
         let mut user = self.get_user_from_token(access_token).await?;
-        user.refresh_token = token_res["refresh_token"].as_str().map(String::from);
+        user.refresh_token = token_res["refresh_token"].as_str().map(|s| secrecy::SecretString::from(s.to_string()));
         user.expires_in = token_res["expires_in"]
             .as_u64()
             .or_else(|| token_res["expires_in"].as_i64().map(|v| v as u64));

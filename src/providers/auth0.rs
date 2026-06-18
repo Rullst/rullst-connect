@@ -8,7 +8,7 @@ use serde_json::Value;
 
 pub struct Auth0Provider {
     client_id: String,
-    client_secret: String,
+    client_secret: secrecy::SecretString,
     redirect_url: String,
     domain: String,
     http_client: ::std::sync::Arc<dyn crate::client::HttpClient>,
@@ -21,10 +21,14 @@ impl Auth0Provider {
     /// Note: domain should be the tenant domain, e.g., "dev-xxxx.us.auth0.com"
     pub fn new(
         client_id: String,
-        client_secret: String,
+        client_secret: secrecy::SecretString,
         redirect_url: String,
         domain: String,
     ) -> Self {
+        use secrecy::ExposeSecret;
+        assert!(!client_id.is_empty(), "Socialite Error: client_id cannot be empty");
+        assert!(!client_secret.expose_secret().is_empty(), "Socialite Error: client_secret cannot be empty");
+        assert!(redirect_url.starts_with("http"), "Socialite Error: redirect_url must be a valid HTTP/HTTPS URL");
         Self {
             client_id,
             client_secret,
@@ -89,7 +93,7 @@ impl Provider for Auth0Provider {
     ) -> Result<crate::user::ConnectUser, crate::error::ConnectError> {
         let form_data = crate::provider::TokenExchangeForm {
             client_id: self.client_id.as_str(),
-            client_secret: Some(self.client_secret.as_str()),
+            client_secret: Some(secrecy::ExposeSecret::expose_secret(&self.client_secret)),
             code: params.auth_code,
             grant_type: Some("authorization_code"),
             redirect_uri: self.redirect_url.as_str(),
@@ -128,7 +132,7 @@ impl Provider for Auth0Provider {
             avatar_url: user_res["picture"].as_str().map(String::from),
             email_verified: user_res["email_verified"].as_bool(),
             raw_data: user_res,
-            access_token: access_token.to_owned(),
+            access_token: secrecy::SecretString::from(access_token.to_owned()),
             refresh_token: None,
             expires_in: None,
         })
@@ -146,13 +150,13 @@ impl Provider for Auth0Provider {
             self.http_client.as_ref(),
             &self.token_url(),
             &self.client_id,
-            &self.client_secret,
+            secrecy::ExposeSecret::expose_secret(&self.client_secret),
             refresh_token,
         )
         .await?;
 
         let mut user = self.get_user_from_token(&token.access_token).await?;
-        user.refresh_token = token.refresh_token;
+        user.refresh_token = token.refresh_token.map(secrecy::SecretString::from);
         user.expires_in = token.expires_in;
         Ok(user)
     }
@@ -167,7 +171,7 @@ mod tests {
     fn test_redirect_url() {
         let provider = Auth0Provider::new(
             "client_id".to_string(),
-            "client_secret".to_string(),
+            secrecy::SecretString::from("client_secret".to_string()),
             "https://redirect.url".to_string(),
             "test.auth0.com".to_string(),
         );
@@ -182,7 +186,7 @@ mod tests {
     fn test_redirect_url_invalid_domain() {
         let provider = Auth0Provider::new(
             "client_id".to_string(),
-            "client_secret".to_string(),
+            secrecy::SecretString::from("client_secret".to_string()),
             "https://redirect.url".to_string(),
             "invalid domain".to_string(), // Space makes it invalid
         );

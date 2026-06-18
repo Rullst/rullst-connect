@@ -36,7 +36,7 @@ impl GithubProvider {
         })?;
 
         let mut user = self.get_user_from_token(access_token).await?;
-        user.refresh_token = token_res["refresh_token"].as_str().map(String::from);
+        user.refresh_token = token_res["refresh_token"].as_str().map(|s| secrecy::SecretString::from(s.to_string()));
         user.expires_in = token_res["expires_in"]
             .as_u64()
             .or_else(|| token_res["expires_in"].as_i64().map(|v| v as u64));
@@ -54,7 +54,7 @@ impl Provider for GithubProvider {
     ) -> Result<ConnectUser, crate::error::ConnectError> {
         let form_data = crate::provider::TokenExchangeForm {
             client_id: self.client_id.as_str(),
-            client_secret: Some(self.client_secret.as_str()),
+            client_secret: Some(secrecy::ExposeSecret::expose_secret(&self.client_secret)),
             code: params.auth_code,
             grant_type: None,
             redirect_uri: self.redirect_url.as_str(),
@@ -93,7 +93,7 @@ impl Provider for GithubProvider {
             avatar_url: user_res["avatar_url"].as_str().map(String::from),
             email_verified: None,
             raw_data: user_res,
-            access_token: access_token.to_string(),
+            access_token: secrecy::SecretString::from(access_token.to_string()),
             refresh_token: None,
             expires_in: None,
         })
@@ -191,7 +191,7 @@ impl Provider for GithubProvider {
         })?;
 
         let mut user = self.get_user_from_token(access_token).await?;
-        user.refresh_token = token_res["refresh_token"].as_str().map(String::from);
+        user.refresh_token = token_res["refresh_token"].as_str().map(|s| secrecy::SecretString::from(s.to_string()));
         user.expires_in = token_res["expires_in"]
             .as_u64()
             .or_else(|| token_res["expires_in"].as_i64().map(|v| v as u64));
@@ -241,7 +241,7 @@ mod tests {
     async fn test_github_get_user() {
         let provider = GithubProvider::new(
             "client_id".to_string(),
-            "client_secret".to_string(),
+            secrecy::SecretString::from("client_secret".to_string()),
             "https://redirect.url".to_string(),
         )
         .with_http_client(Arc::new(MockGithubClient));

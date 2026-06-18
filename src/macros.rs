@@ -10,7 +10,7 @@ macro_rules! define_provider {
     ($name:ident, $($default_scope:expr),*) => {
         pub struct $name {
             pub(crate) client_id: String,
-            pub(crate) client_secret: String,
+            pub(crate) client_secret: secrecy::SecretString,
             pub(crate) redirect_url: String,
             pub(crate) http_client: ::std::sync::Arc<dyn $crate::client::HttpClient>,
             pub(crate) scopes: String,
@@ -19,9 +19,10 @@ macro_rules! define_provider {
         }
 
         impl $name {
-            pub fn new(client_id: String, client_secret: String, redirect_url: String) -> Self {
+            pub fn new(client_id: String, client_secret: secrecy::SecretString, redirect_url: String) -> Self {
+                use secrecy::ExposeSecret;
                 assert!(!client_id.is_empty(), "Socialite Error: client_id cannot be empty");
-                assert!(!client_secret.is_empty(), "Socialite Error: client_secret cannot be empty");
+                assert!(!client_secret.expose_secret().is_empty(), "Socialite Error: client_secret cannot be empty");
                 assert!(redirect_url.starts_with("http"), "Socialite Error: redirect_url must be a valid HTTP/HTTPS URL");
 
                 Self {
@@ -29,7 +30,7 @@ macro_rules! define_provider {
                     client_secret,
                     redirect_url,
                     http_client: $crate::client::DEFAULT_HTTP_CLIENT.clone(),
-                    scopes: [$($default_scope),*].join(" "),
+                    scopes: concat!($($default_scope, " "),*).trim_end().to_string(),
                     state: None,
                     pkce_challenge: None,
                 }
@@ -130,12 +131,13 @@ mod tests {
     fn test_macro_generated_struct_new() {
         let provider = DummyProvider::new(
             "client_id".to_string(),
-            "client_secret".to_string(),
+            secrecy::SecretString::from("client_secret".to_string()),
             "http://redirect_url".to_string(),
         );
 
+        use secrecy::ExposeSecret;
         assert_eq!(provider.client_id, "client_id");
-        assert_eq!(provider.client_secret, "client_secret");
+        assert_eq!(provider.client_secret.expose_secret(), "client_secret");
         assert_eq!(provider.redirect_url, "http://redirect_url");
         assert_eq!(
             provider.scopes,
@@ -149,7 +151,7 @@ mod tests {
     fn test_macro_generated_struct_with_scopes() {
         let provider = DummyProvider::new(
             "client_id".to_string(),
-            "client_secret".to_string(),
+            secrecy::SecretString::from("client_secret".to_string()),
             "http://redirect_url".to_string(),
         )
         .with_scopes(&["new_scope1", "new_scope2"]);
@@ -164,7 +166,7 @@ mod tests {
     fn test_macro_generated_struct_with_state() {
         let provider = DummyProvider::new(
             "client_id".to_string(),
-            "client_secret".to_string(),
+            secrecy::SecretString::from("client_secret".to_string()),
             "http://redirect_url".to_string(),
         )
         .with_state("my_state");
@@ -176,7 +178,7 @@ mod tests {
     fn test_macro_generated_struct_with_pkce() {
         let provider = DummyProvider::new(
             "client_id".to_string(),
-            "client_secret".to_string(),
+            secrecy::SecretString::from("client_secret".to_string()),
             "http://redirect_url".to_string(),
         )
         .with_pkce("my_pkce_challenge");

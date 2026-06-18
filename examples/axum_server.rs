@@ -60,7 +60,7 @@ async fn index() -> Html<&'static str> {
 async fn login_google() -> Redirect {
     let provider = GoogleProvider::new(
         google_client_id(),
-        google_client_secret(),
+        google_client_secret().into(),
         "http://localhost:3000/auth/google/callback".to_string(),
     );
     Redirect::to(&provider.redirect_url())
@@ -69,7 +69,7 @@ async fn login_google() -> Redirect {
 async fn callback_google(Query(query): Query<AuthRequest>) -> impl IntoResponse {
     let provider = GoogleProvider::new(
         google_client_id(),
-        google_client_secret(),
+        google_client_secret().into(),
         "http://localhost:3000/auth/google/callback".to_string(),
     );
 
@@ -92,7 +92,7 @@ async fn callback_google(Query(query): Query<AuthRequest>) -> impl IntoResponse 
 async fn login_github() -> Redirect {
     let provider = GithubProvider::new(
         github_client_id(),
-        github_client_secret(),
+        github_client_secret().into(),
         "http://localhost:3000/auth/github/callback".to_string(),
     );
     Redirect::to(&provider.redirect_url())
@@ -101,7 +101,7 @@ async fn login_github() -> Redirect {
 async fn callback_github(Query(query): Query<AuthRequest>) -> impl IntoResponse {
     let provider = GithubProvider::new(
         github_client_id(),
-        github_client_secret(),
+        github_client_secret().into(),
         "http://localhost:3000/auth/github/callback".to_string(),
     );
 

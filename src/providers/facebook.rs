@@ -13,7 +13,7 @@ impl FacebookProvider {
     ) -> Result<ConnectUser, crate::error::ConnectError> {
         let token_res = self
             .http_client
-            .post(&self.token_url())
+            .post(self.token_url())
             .form(&form_data)
             .send()
             .await?
@@ -26,7 +26,7 @@ impl FacebookProvider {
         })?;
 
         let mut user = self.get_user_from_token(access_token).await?;
-        user.refresh_token = token_res["refresh_token"].as_str().map(String::from);
+        user.refresh_token = token_res["refresh_token"].as_str().map(|s| secrecy::SecretString::from(s.to_string()));
         user.expires_in = token_res["expires_in"]
             .as_u64()
             .or_else(|| token_res["expires_in"].as_i64().map(|v| v as u64));
@@ -44,7 +44,7 @@ impl Provider for FacebookProvider {
     ) -> Result<ConnectUser, crate::error::ConnectError> {
         let mut form_data = vec![
             ("client_id", self.client_id.as_str()),
-            ("client_secret", self.client_secret.as_str()),
+            ("client_secret", secrecy::ExposeSecret::expose_secret(&self.client_secret)),
             ("code", params.auth_code),
             ("redirect_uri", self.redirect_url.as_str()),
         ];
@@ -80,7 +80,7 @@ impl Provider for FacebookProvider {
             avatar_url: avatar,
             email_verified: None,
             raw_data: user_res,
-            access_token: access_token.to_string(),
+            access_token: secrecy::SecretString::from(access_token.to_string()),
             refresh_token: None,
             expires_in: None,
         })

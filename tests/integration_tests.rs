@@ -68,7 +68,7 @@ async fn test_github_get_user_success() {
     let intercept_client = std::sync::Arc::new(WiremockInterceptClient::new(mock_server.uri()));
     let provider = GithubProvider::new(
         "test_client_id".to_string(),
-        "test_client_secret".to_string(),
+        secrecy::SecretString::from("test_client_secret".to_string()),
         "http://localhost/callback".to_string(),
     )
     .with_http_client(intercept_client);
@@ -87,9 +87,9 @@ async fn test_github_get_user_success() {
         user.avatar_url.as_deref(),
         Some("https://github.com/images/error/octocat_happy.gif")
     );
-    assert_eq!(user.access_token, "mock_access_token_123");
+    assert_eq!(secrecy::ExposeSecret::expose_secret(&user.access_token), "mock_access_token_123");
     assert_eq!(
-        user.refresh_token.as_deref(),
+        user.refresh_token.as_ref().map(|s| secrecy::ExposeSecret::expose_secret(s).as_str()),
         Some("mock_refresh_token_abc")
     );
     assert_eq!(user.expires_in, Some(3600));
@@ -112,7 +112,7 @@ async fn test_github_token_error() {
     let intercept_client = std::sync::Arc::new(WiremockInterceptClient::new(mock_server.uri()));
     let provider = GithubProvider::new(
         "test_client_id".to_string(),
-        "test_client_secret".to_string(),
+        secrecy::SecretString::from("test_client_secret".to_string()),
         "http://localhost/callback".to_string(),
     )
     .with_http_client(intercept_client);
@@ -150,7 +150,7 @@ async fn test_github_request_device_code_success() {
     let intercept_client = std::sync::Arc::new(WiremockInterceptClient::new(mock_server.uri()));
     let provider = GithubProvider::new(
         "test_client_id".to_string(),
-        "test_client_secret".to_string(),
+        secrecy::SecretString::from("test_client_secret".to_string()),
         "http://localhost/callback".to_string(),
     )
     .with_http_client(intercept_client);
@@ -179,7 +179,7 @@ async fn test_github_refresh_token_error() {
     let intercept_client = std::sync::Arc::new(WiremockInterceptClient::new(mock_server.uri()));
     let provider = GithubProvider::new(
         "test_client_id".to_string(),
-        "test_client_secret".to_string(),
+        secrecy::SecretString::from("test_client_secret".to_string()),
         "http://localhost/callback".to_string(),
     )
     .with_http_client(intercept_client);
@@ -210,7 +210,7 @@ async fn test_github_get_user_missing_access_token() {
     let intercept_client = std::sync::Arc::new(WiremockInterceptClient::new(mock_server.uri()));
     let provider = GithubProvider::new(
         "test_client_id".to_string(),
-        "test_client_secret".to_string(),
+        secrecy::SecretString::from("test_client_secret".to_string()),
         "http://localhost/callback".to_string(),
     )
     .with_http_client(intercept_client);
@@ -253,7 +253,7 @@ async fn test_github_get_user_missing_id() {
     let intercept_client = std::sync::Arc::new(WiremockInterceptClient::new(mock_server.uri()));
     let provider = GithubProvider::new(
         "test_client_id".to_string(),
-        "test_client_secret".to_string(),
+        secrecy::SecretString::from("test_client_secret".to_string()),
         "http://localhost/callback".to_string(),
     )
     .with_http_client(intercept_client);
