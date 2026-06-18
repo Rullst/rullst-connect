@@ -322,10 +322,15 @@ impl HttpClient for ReqwestClient {
             body_bytes.extend_from_slice(&chunk);
         }
 
-        let text = String::from_utf8(body_bytes).map_err(|e| {
-            crate::error::ConnectError::Provider(format!("Response body is not valid UTF-8: {}", e))
-        })?;
-        let body = serde_json::from_str(&text).unwrap_or(Value::String(text));
+        let body = match serde_json::from_slice(&body_bytes) {
+            Ok(v) => v,
+            Err(_) => {
+                let text = String::from_utf8(body_bytes).map_err(|e| {
+                    crate::error::ConnectError::Provider(format!("Response body is not valid UTF-8: {}", e))
+                })?;
+                Value::String(text)
+            }
+        };
 
         Ok(HttpResponse { status, body })
     }
