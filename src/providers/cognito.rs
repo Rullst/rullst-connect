@@ -74,13 +74,14 @@ impl CognitoProvider {
 impl Provider for CognitoProvider {
     fn redirect_url(&self) -> String {
         let mut params = crate::provider::build_oauth_params(
+            format!("{}/oauth2/authorize", self.domain),
             &self.client_id,
             &self.redirect_url,
             &self.scopes,
             self.state.as_deref(),
             self.pkce_challenge.as_deref(),
         );
-        format!("{}/oauth2/authorize?{}", self.domain, params.finish())
+        params.finish()
     }
 
     async fn get_user(

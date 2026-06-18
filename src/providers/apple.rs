@@ -208,6 +208,7 @@ impl AppleProvider {
 impl Provider for AppleProvider {
     fn redirect_url(&self) -> String {
         let mut params = crate::provider::build_oauth_params(
+            String::from("https://appleid.apple.com/auth/authorize"),
             &self.client_id,
             &self.redirect_url,
             &self.scopes,
@@ -216,10 +217,7 @@ impl Provider for AppleProvider {
         );
         params.append_pair("response_type", "code");
         params.append_pair("response_mode", "form_post");
-        format!(
-            "https://appleid.apple.com/auth/authorize?{}",
-            params.finish()
-        )
+        params.finish()
     }
 
     async fn get_user(

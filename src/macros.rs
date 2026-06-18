@@ -77,13 +77,14 @@ macro_rules! impl_standard_redirect_url {
     ($url:expr) => {
         fn redirect_url(&self) -> String {
             let mut params = $crate::provider::build_oauth_params(
+                $url.to_string(),
                 &self.client_id,
                 &self.redirect_url,
                 &self.scopes,
                 self.state.as_deref(),
                 self.pkce_challenge.as_deref(),
             );
-            format!("{}?{}", $url, params.finish())
+            params.finish()
         }
     };
 }

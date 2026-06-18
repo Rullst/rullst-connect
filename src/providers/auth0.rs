@@ -78,6 +78,7 @@ impl Auth0Provider {
 impl Provider for Auth0Provider {
     fn redirect_url(&self) -> String {
         let mut params = crate::provider::build_oauth_params(
+            format!("https://{}/authorize", self.domain),
             &self.client_id,
             &self.redirect_url,
             &self.scopes,
@@ -85,7 +86,7 @@ impl Provider for Auth0Provider {
             self.pkce_challenge.as_deref(),
         );
         params.append_pair("response_type", "code");
-        format!("https://{}/authorize?{}", self.domain, params.finish())
+        params.finish()
     }
 
     async fn get_user(

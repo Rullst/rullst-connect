@@ -4,13 +4,18 @@ use async_trait::async_trait;
 
 /// Helper to construct standard OAuth2 parameters to reduce boilerplate.
 pub fn build_oauth_params<'a>(
+    base_url: String,
     client_id: &'a str,
     redirect_uri: &'a str,
     scopes: &'a [String],
     state: Option<&'a str>,
     pkce_challenge: Option<&'a str>,
 ) -> url::form_urlencoded::Serializer<'a, String> {
-    let mut params = url::form_urlencoded::Serializer::new(String::with_capacity(256));
+    let mut string = base_url;
+    let separator = if string.contains('?') { '&' } else { '?' };
+    string.push(separator);
+    let start_position = string.len();
+    let mut params = url::form_urlencoded::Serializer::for_suffix(string, start_position);
     params.append_pair("client_id", client_id);
     params.append_pair("redirect_uri", redirect_uri);
     if !scopes.is_empty() {
@@ -47,38 +52,39 @@ pub trait Provider: Send + Sync {
     /// Returns the authorization URL with a `state` parameter appended.
     /// It is highly recommended to use this to prevent CSRF attacks.
     fn redirect_url_with_state(&self, state: &str) -> String {
-        let url = self.redirect_url();
-        let separator = if url.contains('?') { "&" } else { "?" };
-        let encoded_state =
-            url::form_urlencoded::byte_serialize(state.as_bytes()).collect::<String>();
-        format!("{url}{separator}state={encoded_state}")
+        let mut string = self.redirect_url();
+        let separator = if string.contains('?') { '&' } else { '?' };
+        string.push(separator);
+        let start_position = string.len();
+        let mut serializer = url::form_urlencoded::Serializer::for_suffix(string, start_position);
+        serializer.append_pair("state", state);
+        serializer.finish()
     }
 
     /// Returns the authorization URL with a PKCE `code_challenge` appended.
     /// Useful for providers that enforce PKCE (like Twitter/X v2).
     fn redirect_url_with_pkce(&self, code_challenge: &str) -> String {
-        let url = self.redirect_url();
-        let separator = if url.contains('?') { "&" } else { "?" };
-        let encoded_challenge =
-            url::form_urlencoded::byte_serialize(code_challenge.as_bytes()).collect::<String>();
-        format!(
-            "{}{}code_challenge={}&code_challenge_method=S256",
-            url, separator, encoded_challenge
-        )
+        let mut string = self.redirect_url();
+        let separator = if string.contains('?') { '&' } else { '?' };
+        string.push(separator);
+        let start_position = string.len();
+        let mut serializer = url::form_urlencoded::Serializer::for_suffix(string, start_position);
+        serializer.append_pair("code_challenge", code_challenge);
+        serializer.append_pair("code_challenge_method", "S256");
+        serializer.finish()
     }
 
     /// Returns the authorization URL with a PKCE `code_challenge` and a `state` parameter appended.
     fn redirect_url_with_pkce_and_state(&self, code_challenge: &str, state: &str) -> String {
-        let url = self.redirect_url();
-        let separator = if url.contains('?') { "&" } else { "?" };
-        let encoded_challenge =
-            url::form_urlencoded::byte_serialize(code_challenge.as_bytes()).collect::<String>();
-        let encoded_state =
-            url::form_urlencoded::byte_serialize(state.as_bytes()).collect::<String>();
-        format!(
-            "{}{}code_challenge={}&code_challenge_method=S256&state={}",
-            url, separator, encoded_challenge, encoded_state
-        )
+        let mut string = self.redirect_url();
+        let separator = if string.contains('?') { '&' } else { '?' };
+        string.push(separator);
+        let start_position = string.len();
+        let mut serializer = url::form_urlencoded::Serializer::for_suffix(string, start_position);
+        serializer.append_pair("code_challenge", code_challenge);
+        serializer.append_pair("code_challenge_method", "S256");
+        serializer.append_pair("state", state);
+        serializer.finish()
     }
 
     /// Exchanges the authorization code for an access token and fetches the user's profile.
@@ -443,7 +449,7 @@ mod tests {
     #[test]
     fn test_build_oauth_params_variations() {
         // 1. Empty scopes
-        let mut serializer = build_oauth_params("client", "redirect", &[], None, None);
+        let mut serializer = build_oauth_params("".to_string(), "client", "redirect", &[], None, None);
         let query = serializer.finish();
         assert!(query.contains("client_id=client"));
         assert!(query.contains("redirect_uri=redirect"));
@@ -451,13 +457,14 @@ mod tests {
 
         // 2. Single scope
         let scopes_single = [String::from("read")];
-        let mut serializer = build_oauth_params("client", "redirect", &scopes_single, None, None);
+        let mut serializer = build_oauth_params("".to_string(), "client", "redirect", &scopes_single, None, None);
         let query = serializer.finish();
         assert!(query.contains("scope=read"));
 
         // 3. Multiple scopes
         let scopes_multiple = [String::from("read"), String::from("write")];
         let mut serializer = build_oauth_params(
+            "".to_string(),
             "client",
             "redirect",
             &scopes_multiple,
