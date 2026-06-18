@@ -159,8 +159,10 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), axum::http::StatusCode::OK);
-        
-        let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+
+        let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let json: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
         assert_eq!(json["issuer"], "http://localhost:8080");
         assert_eq!(json["authorization_endpoint"], "http://localhost:8080/auth");
@@ -183,8 +185,10 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), axum::http::StatusCode::OK);
-        
-        let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+
+        let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let json: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
         assert_eq!(json["sub"], "mock_user_999");
         assert_eq!(json["email"], "mock@example.com");

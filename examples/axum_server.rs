@@ -15,10 +15,18 @@ struct AuthRequest {
 }
 
 // Em um projeto real, isso viria de variáveis de ambiente (.env)
-fn google_client_id() -> String { std::env::var("GOOGLE_CLIENT_ID").unwrap_or_else(|_| "SEU_GOOGLE_CLIENT_ID".to_string()) }
-fn google_client_secret() -> String { std::env::var("GOOGLE_CLIENT_SECRET").unwrap_or_else(|_| "SEU_GOOGLE_CLIENT_SECRET".to_string()) }
-fn github_client_id() -> String { std::env::var("GITHUB_CLIENT_ID").unwrap_or_else(|_| "SEU_GITHUB_CLIENT_ID".to_string()) }
-fn github_client_secret() -> String { std::env::var("GITHUB_CLIENT_SECRET").unwrap_or_else(|_| "SEU_GITHUB_CLIENT_SECRET".to_string()) }
+fn google_client_id() -> String {
+    std::env::var("GOOGLE_CLIENT_ID").unwrap_or_else(|_| "SEU_GOOGLE_CLIENT_ID".to_string())
+}
+fn google_client_secret() -> String {
+    std::env::var("GOOGLE_CLIENT_SECRET").unwrap_or_else(|_| "SEU_GOOGLE_CLIENT_SECRET".to_string())
+}
+fn github_client_id() -> String {
+    std::env::var("GITHUB_CLIENT_ID").unwrap_or_else(|_| "SEU_GITHUB_CLIENT_ID".to_string())
+}
+fn github_client_secret() -> String {
+    std::env::var("GITHUB_CLIENT_SECRET").unwrap_or_else(|_| "SEU_GITHUB_CLIENT_SECRET".to_string())
+}
 
 #[tokio::main]
 async fn main() {
