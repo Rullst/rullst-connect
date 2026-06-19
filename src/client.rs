@@ -527,4 +527,3 @@ mod tests {
         let _client = ReqwestClient::new_with_retry(3);
     }
 }
-
