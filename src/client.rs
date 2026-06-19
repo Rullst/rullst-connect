@@ -346,6 +346,9 @@ impl HttpClient for ReqwestClient {
     }
 }
 
+pub static DEFAULT_HTTP_CLIENT: std::sync::LazyLock<std::sync::Arc<dyn HttpClient>> =
+    std::sync::LazyLock::new(|| std::sync::Arc::new(ReqwestClient::new()));
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -525,5 +528,3 @@ mod tests {
     }
 }
 
-pub static DEFAULT_HTTP_CLIENT: std::sync::LazyLock<std::sync::Arc<dyn HttpClient>> =
-    std::sync::LazyLock::new(|| std::sync::Arc::new(ReqwestClient::new()));
