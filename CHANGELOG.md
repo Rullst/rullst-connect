@@ -5,7 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [10.0.0] - Unreleased
+## [10.0.1] - 2026-06-19
+
+### Changed
+- **Dependencies**: Bumped `secrecy` requirement to `0.10` and `actions/checkout` to `v7` in GitHub Actions workflows.
+
+## [10.0.0] - 2026-06-18
 
 ### [BREAKING CHANGE]
 - **`build_oauth_params` Signature Change**: The signature of the public helper function `rullst_connect::provider::build_oauth_params` has been updated to accept `base_url` as `&str` and `scopes` as `&str` (previously `String` and `&[String]`). This eliminates cascading heap allocations during URL generation. Developers implementing custom providers using this helper must update their calls to pass string references. The primary user-facing builder API (`with_scopes`) is completely unaffected.

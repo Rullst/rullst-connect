@@ -1,6 +1,6 @@
 [package]
 name = "rullst-connect"
-version = "10.0.0"
+version = "10.0.1"
 edition = "2024"
 description = "OAuth2 Social Login for Rust web frameworks."
 license = "MIT"
@@ -42,7 +42,7 @@ reqwest-retry = { version = "0.9", optional = true }
 tower-sessions = { version = "0.15", optional = true }
 subtle = "2.6.1"
 itoa = "1.0.18"
-secrecy = { version = "0.8", features = ["serde"] }
+secrecy = { version = "0.10", features = ["serde"] }
 
 [dev-dependencies]
 axum = "0.8"
