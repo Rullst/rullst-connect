@@ -94,7 +94,7 @@ async fn test_github_get_user_success() {
     assert_eq!(
         user.refresh_token
             .as_ref()
-            .map(|s| secrecy::ExposeSecret::expose_secret(s)),
+            .map(secrecy::ExposeSecret::expose_secret),
         Some("mock_refresh_token_abc")
     );
     assert_eq!(user.expires_in, Some(3600));
