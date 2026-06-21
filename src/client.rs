@@ -368,7 +368,9 @@ impl HttpClient for ReqwestClient {
 #[async_trait]
 impl HttpClient for ReqwestClient {
     async fn execute(&self, _req: HttpRequest) -> Result<HttpResponse, crate::error::ConnectError> {
-        Err(crate::error::ConnectError::Provider("Network requests are not supported under Miri".to_string()))
+        Err(crate::error::ConnectError::Provider(
+            "Network requests are not supported under Miri".to_string(),
+        ))
     }
 }
 

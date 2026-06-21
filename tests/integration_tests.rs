@@ -1,3 +1,4 @@
+#![cfg(not(miri))]
 use async_trait::async_trait;
 use rullst_connect::client::{HttpClient, HttpRequest, HttpResponse};
 use rullst_connect::error::ConnectError;
