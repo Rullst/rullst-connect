@@ -1,0 +1,22 @@
+[advisories]
+# Não falhar o CI por crates descontinuados (apenas avisa)
+unmaintained = "warn"
+
+[licenses]
+# Licenças permitidas globalmente
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "BSD-3-Clause",
+    "ISC",
+    "OpenSSL",
+]
+
+# Exceções para crates específicos que usam strings de licença fora do padrão SPDX
+[[licenses.clarify]]
+name = "zstd-sys"
+version = "*"
+expression = "MIT OR Apache-2.0"
+license-files = [
+    { path = "LICENSE", hash = 0 }
+]
