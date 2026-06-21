@@ -69,7 +69,7 @@ mod tests {
     #[cfg_attr(miri, ignore)]
     fn test_reqwest_error_conversion() {
         let err = reqwest::Client::new()
-            .get("http://invalid")
+            .get("htt p://invalid")
             .build()
             .unwrap_err();
         let connect_err: ConnectError = err.into();

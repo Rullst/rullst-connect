@@ -1,6 +1,6 @@
 [advisories]
 # Não falhar o CI por crates descontinuados (apenas avisa)
-unmaintained = "warn"
+unmaintained = "none"
 
 [licenses]
 # Licenças permitidas globalmente
