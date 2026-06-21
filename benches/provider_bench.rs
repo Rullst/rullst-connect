@@ -1,14 +1,17 @@
+use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use rullst_connect::providers::github::GithubProvider;
-use std::time::Instant;
 
-fn main() {
-    let start = Instant::now();
-    for _ in 0..100 {
-        let _provider = GithubProvider::new(
-            "client_id".to_string(),
-            "client_secret".to_string().into(),
-            "http://redirect_url".to_string(),
-        );
-    }
-    println!("Elapsed creating 100 providers: {:?}", start.elapsed());
+fn provider_benchmark(c: &mut Criterion) {
+    c.bench_function("github_provider_creation", |b| {
+        b.iter(|| {
+            GithubProvider::new(
+                black_box("client_id".to_string()),
+                black_box("client_secret".to_string().into()),
+                black_box("http://redirect_url".to_string()),
+            )
+        })
+    });
 }
+
+criterion_group!(benches, provider_benchmark);
+criterion_main!(benches);

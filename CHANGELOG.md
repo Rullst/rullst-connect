@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Quality & Security Pipeline**:
+  - Replaced `cargo-audit` with `cargo-deny` for comprehensive vulnerability, license, and ban checks.
+  - Added `cargo-llvm-cov` for accurate, LLVM-based code coverage.
+  - Integrated `cargo-mutants` for mutation testing to ensure robust test assertions.
+  - Configured GitHub CodeQL for automated taint analysis and static application security testing (SAST).
+  - Configured `Miri` in CI to automatically test for Undefined Behavior and memory safety.
+  - Configured `cargo-fuzz` CI infrastructure with a manual trigger and a strict 6-hour timeout to prevent runner exhaustion.
+  - Added `criterion`, `loom`, and Kani verifier as development dependencies for microbenchmarking, concurrent async testing, and formal verification.
+  - Refactored `provider_bench` to use the `Criterion` framework.
+
 ## [10.0.1] - 2026-06-19
 
 ### Changed

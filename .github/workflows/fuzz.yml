@@ -1,0 +1,40 @@
+name: Fuzz Testing
+
+on:
+  workflow_dispatch:
+    inputs:
+      duration:
+        description: 'Duration per fuzz target (seconds)'
+        required: false
+        default: '3600' # 1 hora padrão por target
+        type: string
+  schedule:
+    # Roda todo domingo às 2 da manhã (opcional)
+    - cron: '0 2 * * 0'
+
+jobs:
+  fuzz:
+    name: Run cargo-fuzz
+    runs-on: ubuntu-latest
+    # O GitHub limita jobs a 6 horas (360 minutos) de qualquer forma, 
+    # mas declaramos aqui para evitar cobranças/travamentos caso algo dê errado.
+    timeout-minutes: 360
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Rust Nightly
+        uses: dtolnay/rust-toolchain@nightly
+        
+      - name: Install cargo-fuzz
+        uses: taiki-e/install-action@cargo-fuzz
+        
+      # NOTA: Este passo irá falhar/não fará nada se não houver targets definidos em `fuzz/fuzz_targets/`.
+      # Assim que você rodar `cargo fuzz init` localmente e commitar, este job funcionará automaticamente.
+      - name: Run Fuzzing
+        run: |
+          if [ -d "fuzz" ]; then
+            cargo fuzz run default_target -- -max_total_time=${{ github.event.inputs.duration || '3600' }}
+          else
+            echo "Fuzz directory not found. Please run 'cargo fuzz init' locally first."
+          fi
