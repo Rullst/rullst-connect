@@ -10,6 +10,8 @@ allow = [
     "BSD-3-Clause",
     "ISC",
     "OpenSSL",
+    "Zlib",
+    "Unicode-3.0",
 ]
 
 # Exceções para crates específicos que usam strings de licença fora do padrão SPDX
