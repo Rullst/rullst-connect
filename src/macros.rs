@@ -122,7 +122,7 @@ macro_rules! impl_standard_refresh_token {
     };
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(miri)))]
 #[allow(dead_code)]
 mod tests {
     define_provider!(DummyProvider, "default_scope1", "default_scope2");
