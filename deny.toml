@@ -2,6 +2,10 @@
 # Não falhar o CI por crates descontinuados (apenas avisa)
 unmaintained = "none"
 
+[bans]
+# Ignorar avisos de múltiplas versões da mesma dependência (ex: thiserror v1 e v2)
+multiple-versions = "allow"
+
 [licenses]
 # Licenças permitidas globalmente
 allow = [
@@ -12,6 +16,8 @@ allow = [
     "OpenSSL",
     "Zlib",
     "Unicode-3.0",
+    "CDLA-Permissive-2.0",
+    "BSL-1.0",
 ]
 
 # Exceções para crates específicos que usam strings de licença fora do padrão SPDX
