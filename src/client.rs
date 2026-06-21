@@ -152,6 +152,7 @@ impl ResponseWrapper {
 }
 
 /// The default reqwest-based implementation of `HttpClient`.
+#[cfg(not(miri))]
 pub struct ReqwestClient {
     #[cfg(not(feature = "retry"))]
     client: reqwest::Client,
@@ -159,6 +160,10 @@ pub struct ReqwestClient {
     client: reqwest_middleware::ClientWithMiddleware,
 }
 
+#[cfg(miri)]
+pub struct ReqwestClient {}
+
+#[cfg(not(miri))]
 impl ReqwestClient {
     pub fn new() -> Self {
         let reqwest_client = reqwest::Client::builder()
@@ -204,12 +209,25 @@ impl ReqwestClient {
     }
 }
 
+#[cfg(miri)]
+impl ReqwestClient {
+    pub fn new() -> Self {
+        Self {}
+    }
+
+    #[cfg(feature = "retry")]
+    pub fn new_with_retry(_max_retries: u32) -> Self {
+        Self {}
+    }
+}
+
 impl Default for ReqwestClient {
     fn default() -> Self {
         Self::new()
     }
 }
 
+#[cfg(not(miri))]
 #[async_trait]
 impl HttpClient for ReqwestClient {
     #[tracing::instrument(skip(self, req), fields(method = %req.method, url = %req.url))]
@@ -343,6 +361,14 @@ impl HttpClient for ReqwestClient {
         };
 
         Ok(HttpResponse { status, body })
+    }
+}
+
+#[cfg(miri)]
+#[async_trait]
+impl HttpClient for ReqwestClient {
+    async fn execute(&self, _req: HttpRequest) -> Result<HttpResponse, crate::error::ConnectError> {
+        Err(crate::error::ConnectError::Provider("Network requests are not supported under Miri".to_string()))
     }
 }
 
