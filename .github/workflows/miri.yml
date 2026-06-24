@@ -3,6 +3,8 @@ name: Miri Memory Safety
 on:
   workflow_dispatch:
 
+permissions: read-all
+
 jobs:
   miri:
     name: Miri Memory Safety
