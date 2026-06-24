@@ -63,3 +63,7 @@ harness = false
 [[example]]
 name = "axum_example"
 required-features = ["axum"]
+
+[lints.rust]
+# Kani é uma ferramenta externa que injeta `cfg(kani)` automaticamente — não é uma crate do crates.io
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)'] }

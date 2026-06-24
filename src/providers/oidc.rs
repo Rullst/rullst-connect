@@ -1076,6 +1076,8 @@ mod tests {
             })
             .await
             .unwrap_err();
+        assert!(
+            matches!(err, crate::error::ConnectError::Provider(msg) if msg.contains("nonce mismatch"))
         );
     }
 }
