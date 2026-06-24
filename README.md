@@ -5,12 +5,14 @@
 [![Documentation](https://docs.rs/rullst-connect/badge.svg)](https://docs.rs/rullst-connect)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Rust Version](https://img.shields.io/badge/rustc-1.75+-lightgray.svg)](https://blog.rust-lang.org/2023/12/28/Rust-1.75.0.html)
-[![CI Build](https://github.com/venelouis/rullst-connect/actions/workflows/ci.yml/badge.svg)](https://github.com/venelouis/rullst-connect/actions/workflows/ci.yml)
-[![Publish](https://github.com/venelouis/rullst-connect/actions/workflows/publish.yml/badge.svg)](https://github.com/venelouis/rullst-connect/actions)
-[![Audit: 10/10](https://img.shields.io/badge/Audit-10%2F10-success.svg)](AUDIT.md)
-[![Zero Panics](https://img.shields.io/badge/Panics-0-success.svg)](AUDIT.md)
-
 **Rullst Connect** is an elegant, async-first, and Developer Experience (DX) focused OAuth2 authentication library for Rust. It simplifies the integration of social logins into your Rust web applications, providing a standardized interface across multiple providers.
+
+## 🛡️ Quality & Security Audits
+
+| CI & Coverage | Security & Analysis | Formal & Advanced Testing |
+| :--- | :--- | :--- |
+| [![CI Build](https://github.com/venelouis/rullst-connect/actions/workflows/ci.yml/badge.svg)](https://github.com/venelouis/rullst-connect/actions/workflows/ci.yml)<br>[![Coverage](https://codecov.io/gh/venelouis/rullst-connect/graph/badge.svg)](https://codecov.io/gh/venelouis/rullst-connect)<br>[![Spellcheck](https://github.com/venelouis/rullst-connect/actions/workflows/spellcheck.yml/badge.svg)](https://github.com/venelouis/rullst-connect/actions/workflows/spellcheck.yml) | [![CodeQL](https://github.com/venelouis/rullst-connect/actions/workflows/codeql.yml/badge.svg)](https://github.com/venelouis/rullst-connect/actions/workflows/codeql.yml)<br>[![Cargo Deny](https://github.com/venelouis/rullst-connect/actions/workflows/cargo-deny.yml/badge.svg)](https://github.com/venelouis/rullst-connect/actions/workflows/cargo-deny.yml)<br>[![Machete](https://github.com/venelouis/rullst-connect/actions/workflows/machete.yml/badge.svg)](https://github.com/venelouis/rullst-connect/actions/workflows/machete.yml) | [![Fuzz Testing](https://github.com/venelouis/rullst-connect/actions/workflows/fuzz.yml/badge.svg)](https://github.com/venelouis/rullst-connect/actions/workflows/fuzz.yml)<br>[![Mutants](https://github.com/venelouis/rullst-connect/actions/workflows/mutants.yml/badge.svg)](https://github.com/venelouis/rullst-connect/actions/workflows/mutants.yml)<br>[![Kani](https://github.com/venelouis/rullst-connect/actions/workflows/kani.yml/badge.svg)](https://github.com/venelouis/rullst-connect/actions/workflows/kani.yml) |
+| [![Publish](https://github.com/venelouis/rullst-connect/actions/workflows/publish.yml/badge.svg)](https://github.com/venelouis/rullst-connect/actions) | [![Semver Checks](https://github.com/venelouis/rullst-connect/actions/workflows/semver.yml/badge.svg)](https://github.com/venelouis/rullst-connect/actions/workflows/semver.yml) | [![Zero Panics](https://img.shields.io/badge/Panics-0-success.svg)](AUDIT.md)<br>[![Audit: 10/10](https://img.shields.io/badge/Audit-10%2F10-success.svg)](AUDIT.md) |
 
 ## ✨ Features
 

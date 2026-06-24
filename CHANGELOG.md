@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Configured GitHub CodeQL for automated taint analysis and static application security testing (SAST).
   - Configured `Miri` in CI to automatically test for Undefined Behavior and memory safety.
   - Configured `cargo-fuzz` CI infrastructure with a manual trigger and a strict 6-hour timeout to prevent runner exhaustion.
+  - Added `cargo-semver-checks` workflow to enforce SemVer compliance in PRs and prevent accidental breaking changes.
+  - Added `cargo-machete` workflow to enforce removal of unused dependencies.
+  - Added `cargo-spellcheck` workflow to catch spelling and grammar errors in documentation.
+  - Added `cargo-kani` workflow to automate mathematical proofs via Kani Rust Verifier.
+  - Configured GitHub Dependabot for automated weekly updates on crates and GitHub Actions.
   - Added `criterion`, `loom`, and Kani verifier as development dependencies for microbenchmarking, concurrent async testing, and formal verification.
   - Refactored `provider_bench` to use the `Criterion` framework.
 
