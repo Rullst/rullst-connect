@@ -210,7 +210,15 @@ mod tests {
     use serde_json::json;
     use std::sync::Arc;
 
-    struct MockGithubClient;
+    struct MockGithubClient {
+        token_status: u16,
+        token_body: serde_json::Value,
+        user_status: u16,
+        user_body: serde_json::Value,
+        device_status: u16,
+        device_body: serde_json::Value,
+    }
+
     #[async_trait]
     impl HttpClient for MockGithubClient {
         async fn execute(
@@ -219,23 +227,18 @@ mod tests {
         ) -> Result<HttpResponse, crate::error::ConnectError> {
             if req.url.contains("access_token") {
                 Ok(HttpResponse {
-                    status: 200,
-                    body: json!({
-                        "access_token": "mock_token",
-                        "token_type": "bearer",
-                        "scope": "user:email"
-                    }),
+                    status: self.token_status,
+                    body: self.token_body.clone(),
+                })
+            } else if req.url.contains("device/code") {
+                Ok(HttpResponse {
+                    status: self.device_status,
+                    body: self.device_body.clone(),
                 })
             } else {
                 Ok(HttpResponse {
-                    status: 200,
-                    body: json!({
-                        "id": 1234567,
-                        "login": "octocat",
-                        "name": "monalisa octocat",
-                        "email": "octocat@github.com",
-                        "avatar_url": "https://github.com/images/error/octocat_happy.gif"
-                    }),
+                    status: self.user_status,
+                    body: self.user_body.clone(),
                 })
             }
         }
@@ -248,7 +251,24 @@ mod tests {
             secrecy::SecretString::from("client_secret".to_string()),
             "https://redirect.url".to_string(),
         )
-        .with_http_client(Arc::new(MockGithubClient));
+        .with_http_client(Arc::new(MockGithubClient {
+            token_status: 200,
+            token_body: json!({
+                "access_token": "mock_token",
+                "token_type": "bearer",
+                "scope": "user:email"
+            }),
+            user_status: 200,
+            user_body: json!({
+                "id": 1234567,
+                "login": "octocat",
+                "name": "monalisa octocat",
+                "email": "octocat@github.com",
+                "avatar_url": "https://github.com/images/error/octocat_happy.gif"
+            }),
+            device_status: 200,
+            device_body: json!({}),
+        }));
 
         let params = crate::provider::ExchangeParams {
             auth_code: "mock_code",
@@ -263,5 +283,130 @@ mod tests {
             user.avatar_url,
             Some("https://github.com/images/error/octocat_happy.gif".to_string())
         );
+    }
+
+    #[tokio::test]
+    async fn test_github_token_error() {
+        let provider = GithubProvider::new(
+            "client_id".to_string(),
+            secrecy::SecretString::from("client_secret".to_string()),
+            "https://redirect.url".to_string(),
+        )
+        .with_http_client(Arc::new(MockGithubClient {
+            token_status: 400,
+            token_body: json!({"error": "invalid_grant"}),
+            user_status: 200,
+            user_body: json!({}),
+            device_status: 200,
+            device_body: json!({}),
+        }));
+
+        let err = provider.get_user(crate::provider::ExchangeParams {
+            auth_code: "code",
+            ..Default::default()
+        }).await.unwrap_err();
+        
+        assert!(matches!(err, crate::error::ConnectError::ProviderApiError { .. }));
+    }
+
+    #[tokio::test]
+    async fn test_github_request_device_code_success() {
+        let provider = GithubProvider::new(
+            "client_id".to_string(),
+            secrecy::SecretString::from("client_secret".to_string()),
+            "https://redirect.url".to_string(),
+        )
+        .with_http_client(Arc::new(MockGithubClient {
+            token_status: 200,
+            token_body: json!({}),
+            user_status: 200,
+            user_body: json!({}),
+            device_status: 200,
+            device_body: json!({
+                "device_code": "device_123",
+                "user_code": "user_456",
+                "verification_uri": "https://github.com/login/device",
+                "expires_in": 900,
+                "interval": 5
+            }),
+        }));
+
+        let res = provider.request_device_code().await.unwrap();
+        assert_eq!(res.device_code, "device_123");
+        assert_eq!(res.user_code, "user_456");
+        assert_eq!(res.verification_uri, "https://github.com/login/device");
+    }
+
+    #[tokio::test]
+    async fn test_github_poll_device_token_success() {
+        let provider = GithubProvider::new(
+            "client_id".to_string(),
+            secrecy::SecretString::from("client_secret".to_string()),
+            "https://redirect.url".to_string(),
+        )
+        .with_http_client(Arc::new(MockGithubClient {
+            token_status: 200,
+            token_body: json!({
+                "access_token": "mock_token",
+                "token_type": "bearer",
+                "scope": "user:email"
+            }),
+            user_status: 200,
+            user_body: json!({
+                "id": 1234567,
+                "login": "octocat",
+                "name": "monalisa octocat",
+                "email": "octocat@github.com",
+                "avatar_url": "https://github.com/images/error/octocat_happy.gif"
+            }),
+            device_status: 200,
+            device_body: json!({}),
+        }));
+
+        let user = provider.poll_device_token("device_123").await.unwrap();
+        assert_eq!(user.id, "1234567");
+    }
+
+    #[tokio::test]
+    async fn test_github_poll_device_token_error() {
+        let provider = GithubProvider::new(
+            "client_id".to_string(),
+            secrecy::SecretString::from("client_secret".to_string()),
+            "https://redirect.url".to_string(),
+        )
+        .with_http_client(Arc::new(MockGithubClient {
+            token_status: 200, // Github returns 200 for authorization_pending
+            token_body: json!({
+                "error": "authorization_pending",
+                "error_description": "User has not yet entered code."
+            }),
+            user_status: 200,
+            user_body: json!({}),
+            device_status: 200,
+            device_body: json!({}),
+        }));
+
+        let err = provider.poll_device_token("device_123").await.unwrap_err();
+        assert!(matches!(err, crate::error::ConnectError::Token(msg) if msg.contains("authorization_pending")));
+    }
+
+    #[tokio::test]
+    async fn test_github_poll_device_token_missing_token() {
+        let provider = GithubProvider::new(
+            "client_id".to_string(),
+            secrecy::SecretString::from("client_secret".to_string()),
+            "https://redirect.url".to_string(),
+        )
+        .with_http_client(Arc::new(MockGithubClient {
+            token_status: 200,
+            token_body: json!({}), // No access_token and no error
+            user_status: 200,
+            user_body: json!({}),
+            device_status: 200,
+            device_body: json!({}),
+        }));
+
+        let err = provider.poll_device_token("device_123").await.unwrap_err();
+        assert!(matches!(err, crate::error::ConnectError::Token(msg) if msg.contains("Failed to get access_token during device poll")));
     }
 }

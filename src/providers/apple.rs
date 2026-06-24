@@ -355,4 +355,373 @@ mod tests {
             _ => panic!("Expected Provider error"),
         }
     }
+
+    #[tokio::test]
+    async fn test_apple_generate_client_secret_invalid_key() {
+        let provider = AppleProvider::new(
+            "client_id".to_string(),
+            "team_id".to_string(),
+            "key_id".to_string(),
+            "invalid_private_key_pem".to_string(),
+            "https://redirect.url".to_string(),
+        );
+
+        let err = provider.get_user(crate::provider::ExchangeParams {
+            auth_code: "code",
+            ..Default::default()
+        }).await.unwrap_err();
+
+        assert!(matches!(err, crate::error::ConnectError::Jwt(_)));
+    }
+
+    use crate::client::{HttpClient, HttpRequest, HttpResponse};
+    use serde_json::json;
+    use std::sync::Arc;
+
+    struct MockAppleClient {
+        token_status: u16,
+        token_body: serde_json::Value,
+    }
+
+    #[async_trait]
+    impl HttpClient for MockAppleClient {
+        async fn execute(
+            &self,
+            req: HttpRequest,
+        ) -> Result<HttpResponse, crate::error::ConnectError> {
+            if req.url.contains("token") {
+                Ok(HttpResponse {
+                    status: self.token_status,
+                    body: self.token_body.clone(),
+                })
+            } else {
+                Ok(HttpResponse { status: 200, body: json!({}) })
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_apple_token_error() {
+        // We use a valid-looking PEM just so it parses, but then the HTTP request fails.
+        // Or we can just call get_user_from_form directly which is private to the module.
+        let provider = AppleProvider::new(
+            "client_id".to_string(),
+            "team_id".to_string(),
+            "key_id".to_string(),
+            "private_key".to_string(),
+            "https://redirect.url".to_string(),
+        ).with_http_client(Arc::new(MockAppleClient {
+            token_status: 400,
+            token_body: json!({"error": "invalid_grant"}),
+        }));
+
+        let form_data = crate::provider::TokenExchangeForm {
+            client_id: "client_id",
+            client_secret: Some("secret"),
+            code: "code",
+            grant_type: Some("authorization_code"),
+            redirect_uri: "https://redirect.url",
+            code_verifier: None,
+        };
+
+        let err = provider.get_user_from_form(&form_data, None).await.unwrap_err();
+        assert!(matches!(err, crate::error::ConnectError::ProviderApiError { .. }));
+    }
+
+    #[tokio::test]
+    async fn test_apple_missing_id_token() {
+        let provider = AppleProvider::new(
+            "client_id".to_string(),
+            "team_id".to_string(),
+            "key_id".to_string(),
+            "private_key".to_string(),
+            "https://redirect.url".to_string(),
+        ).with_http_client(Arc::new(MockAppleClient {
+            token_status: 200,
+            token_body: json!({
+                "access_token": "mock_token" // missing id_token
+            }),
+        }));
+
+        let form_data = crate::provider::TokenExchangeForm {
+            client_id: "client_id",
+            client_secret: Some("secret"),
+            code: "code",
+            grant_type: Some("authorization_code"),
+            redirect_uri: "https://redirect.url",
+            code_verifier: None,
+        };
+
+        let err = provider.get_user_from_form(&form_data, None).await.unwrap_err();
+        assert!(matches!(err, crate::error::ConnectError::Token(msg) if msg.contains("id_token")));
+    }
+
+    #[tokio::test]
+    async fn test_apple_missing_access_token() {
+        let provider = AppleProvider::new(
+            "client_id".to_string(),
+            "team_id".to_string(),
+            "key_id".to_string(),
+            "private_key".to_string(),
+            "https://redirect.url".to_string(),
+        ).with_http_client(Arc::new(MockAppleClient {
+            token_status: 200,
+            token_body: json!({
+                "id_token": "mock_id_token" // missing access_token
+            }),
+        }));
+
+        let form_data = crate::provider::TokenExchangeForm {
+            client_id: "client_id",
+            client_secret: Some("secret"),
+            code: "code",
+            grant_type: Some("authorization_code"),
+            redirect_uri: "https://redirect.url",
+            code_verifier: None,
+        };
+
+        let err = provider.get_user_from_form(&form_data, None).await.unwrap_err();
+        assert!(matches!(err, crate::error::ConnectError::Token(msg) if msg.contains("access_token")));
+    }
+
+    #[tokio::test]
+    async fn test_apple_id_token_valid() {
+        let pem = b"-----BEGIN PRIVATE KEY-----\n\
+        MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCxbATI3BfP+iG3\n\
+        oFVmomIagpUVFbJ56yBKAlhwzgbBZL9jjmISRl1ti4+V7A5GFXPwkTu19OZVUidG\n\
+        YsMCgAR5MH6Setk+NovSmhmYKIIZts05ryVRc9skmtgVtCUaHAw4F9k6l4lyNq3f\n\
+        G4lG2qSZqrr9sa70F8kZQ7DNnes/zfkkKGpH+g6ZSlwLoQ9H0EHSl2u8Fhn+2Wwq\n\
+        GCY0kjp20rU19BOIivi2Pj0iJJpUIjZzIjEp/aTNa7mP1h+oq1xNSWpCQ7bpYJx0\n\
+        GM7Y0tGJXRKf5AsY+VAnSgOZCMP9JQ73Gew2a0ilt2Qfon6esofTBb0VBbv3rXtS\n\
+        nqpu7tcFAgMBAAECggEACJNjzNCknwMkX5OSpS4ap1Th/12n3ZBBpIol+7fdqDnm\n\
+        LVn7wA3iJLIe+9xn2TfevYVLmVEv0/ZvWw3ZhrSo4rG3IH3rI8BvtDuKGqp0lWka\n\
+        VNw0JdJ/iG6qnKvzMiaiaZCviY87D8f4UgUq9r+JPrs7pBkTT42ZxQyaTmoAbbpC\n\
+        gE5afzy801AdqmzrlrxNzZJpmfS0CsLKKQub49LDlh84h6z7X7Iv2Lbq2gxvEcgt\n\
+        h5uyIduciICtCZYtkaNbC1lnj/ecBSoAWKOSOCP1ISg65LjZwvhiVB4jgZUhrXsp\n\
+        9FscocRWe92HunCeEt0IB+Q+JMkO/e9rFeSfMiIYkQKBgQDvCPrGM2IaKCfkVpXs\n\
+        zZcYKNoukL7ID/H+LWByoQHF1O6tBI5VAuduEB5K/J4SrqZcWC1PdiscEdRQh5Ik\n\
+        Q2Jrpg2djzCxg6rDI88piOm9+UBH09YjxIITYI9q74prsWC+8dJbiGruOWEZp4On\n\
+        VXuE7OE9aUcNkkpRV/gOcvwGsQKBgQC+A5eax4nJfCZ9Zroypd8sN/7i/bJbkr+s\n\
+        38jRtJreJRahOTccO3I9yDo0idVlLoubFlokl55gjwu4IOBYbY3mg8Ka8shZe5v8\n\
+        x6MZPlwDXt4OTR2QEJcN3QQgon3wpG7gbzjRR8syi4fDESe1kVVTRnOIS6kKfBAl\n\
+        SXLHpM6SlQKBgG9LbQevkPPA0qIcNn4lUz5qdvvLZSjdU70W/5sfoCWueNqSDntC\n\
+        eOLkGlarvCXSr567Z41h5bySCJreJItB3Kdmj1xW+UMNnQpyt9gM6VgMn4NR/Jh2\n\
+        vGGtSdluYrK1yefdzCXWJIN6r900A7Z7tKE1ccIYLH8DKBsrrFF99B5hAoGAJqsi\n\
+        ehwrXTaHurNiJxZ8cUo/87+/QUV+/lZYTtzbO2P+0/aJ0ZQDbrFFrxVxuPKc9IW6\n\
+        +IFmeK4Dq4f9P+GjpAqiWtgXj6ZJG0shVOzM2t6+f9iPsJa/ttGImn+W85by/XeE\n\
+        74oVvwaILVlbZGbcH2NR9aW4E+slegEVe619YHUCgYBwOo5Czo4tDLTI0AYwx/on\n\
+        a1JhoEeS1o3f/BfneofQqOFFeATUmU52tidm8G4wSGfkCKRtj3w8JP+gpSXJ6v6G\n\
+        imOfWTISM8OrQHS4RmPK+mRor4a7Pf930DCF6W2PRXZgYdBw7Gs6TnClpy5RXslE\n\
+        LQR3iiL0OLIZDwiYlfBWLA==\n\
+        -----END PRIVATE KEY-----";
+        
+        let n_val = "sWwEyNwXz_oht6BVZqJiGoKVFRWyeesgSgJYcM4GwWS_Y45iEkZdbYuPlewORhVz8JE7tfTmVVInRmLDAoAEeTB-knrZPjaL0poZmCiCGbbNOa8lUXPbJJrYFbQlGhwMOBfZOpeJcjat3xuJRtqkmaq6_bGu9BfJGUOwzZ3rP835JChqR_oOmUpcC6EPR9BB0pdrvBYZ_tlsKhgmNJI6dtK1NfQTiIr4tj49IiSaVCI2cyIxKf2kzWu5j9YfqKtcTUlqQkO26WCcdBjO2NLRiV0Sn-QLGPlQJ0oDmQjD_SUO9xnsNmtIpbdkH6J-nrKH0wW9FQW79617Up6qbu7XBQ";
+        let e_val = "AQAB";
+
+        let priv_key = jsonwebtoken::EncodingKey::from_rsa_pem(pem).unwrap();
+        let mut header = jsonwebtoken::Header::new(jsonwebtoken::Algorithm::RS256);
+        header.kid = Some("valid_kid".to_string());
+        
+        let exp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() + 3600;
+
+        let claims = serde_json::json!({
+            "iss": "https://appleid.apple.com",
+            "aud": "client_id",
+            "exp": exp,
+            "sub": "apple_sub_123",
+            "email": "apple@example.com",
+            "nonce": "test_nonce"
+        });
+
+        let id_token = jsonwebtoken::encode(&header, &claims, &priv_key).unwrap();
+
+        struct ValidAppleClient {
+            id_token: String,
+            n: String,
+            e: String,
+        }
+        #[async_trait]
+        impl HttpClient for ValidAppleClient {
+            async fn execute(&self, req: HttpRequest) -> Result<HttpResponse, crate::error::ConnectError> {
+                if req.url.contains("token") {
+                    Ok(HttpResponse {
+                        status: 200,
+                        body: serde_json::json!({
+                            "access_token": "mock_access_token",
+                            "id_token": self.id_token
+                        }),
+                    })
+                } else if req.url.contains("keys") {
+                    Ok(HttpResponse {
+                        status: 200,
+                        body: serde_json::json!({
+                            "keys": [
+                                {
+                                    "kid": "valid_kid",
+                                    "kty": "RSA",
+                                    "alg": "RS256",
+                                    "n": self.n,
+                                    "e": self.e
+                                }
+                            ]
+                        }),
+                    })
+                } else {
+                    Ok(HttpResponse { status: 200, body: serde_json::json!({}) })
+                }
+            }
+        }
+
+        let provider = AppleProvider::new(
+            "client_id".to_string(),
+            "team_id".to_string(),
+            "key_id".to_string(),
+            "private_key".to_string(),
+            "https://redirect.url".to_string(),
+        ).with_http_client(std::sync::Arc::new(ValidAppleClient {
+            id_token,
+            n: n_val.to_string(),
+            e: e_val.to_string(),
+        }));
+
+        let form_data = crate::provider::TokenExchangeForm {
+            client_id: "client_id",
+            client_secret: Some("secret"),
+            code: "code",
+            grant_type: Some("authorization_code"),
+            redirect_uri: "https://redirect.url",
+            code_verifier: None,
+        };
+
+        let user = provider.get_user_from_form(&form_data, Some("test_nonce")).await.unwrap();
+
+        assert_eq!(user.id, "apple_sub_123");
+        assert_eq!(user.email.as_deref(), Some("apple@example.com"));
+
+        let err = provider.get_user_from_form(&form_data, Some("wrong_nonce")).await.unwrap_err();
+        assert!(matches!(err, crate::error::ConnectError::Provider(msg) if msg.contains("nonce mismatch")));
+    }
+
+    #[tokio::test]
+    async fn test_apple_refresh_token_success() {
+        let pem = b"-----BEGIN PRIVATE KEY-----\n\
+        MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCxbATI3BfP+iG3\n\
+        oFVmomIagpUVFbJ56yBKAlhwzgbBZL9jjmISRl1ti4+V7A5GFXPwkTu19OZVUidG\n\
+        YsMCgAR5MH6Setk+NovSmhmYKIIZts05ryVRc9skmtgVtCUaHAw4F9k6l4lyNq3f\n\
+        G4lG2qSZqrr9sa70F8kZQ7DNnes/zfkkKGpH+g6ZSlwLoQ9H0EHSl2u8Fhn+2Wwq\n\
+        GCY0kjp20rU19BOIivi2Pj0iJJpUIjZzIjEp/aTNa7mP1h+oq1xNSWpCQ7bpYJx0\n\
+        GM7Y0tGJXRKf5AsY+VAnSgOZCMP9JQ73Gew2a0ilt2Qfon6esofTBb0VBbv3rXtS\n\
+        nqpu7tcFAgMBAAECggEACJNjzNCknwMkX5OSpS4ap1Th/12n3ZBBpIol+7fdqDnm\n\
+        LVn7wA3iJLIe+9xn2TfevYVLmVEv0/ZvWw3ZhrSo4rG3IH3rI8BvtDuKGqp0lWka\n\
+        VNw0JdJ/iG6qnKvzMiaiaZCviY87D8f4UgUq9r+JPrs7pBkTT42ZxQyaTmoAbbpC\n\
+        gE5afzy801AdqmzrlrxNzZJpmfS0CsLKKQub49LDlh84h6z7X7Iv2Lbq2gxvEcgt\n\
+        h5uyIduciICtCZYtkaNbC1lnj/ecBSoAWKOSOCP1ISg65LjZwvhiVB4jgZUhrXsp\n\
+        9FscocRWe92HunCeEt0IB+Q+JMkO/e9rFeSfMiIYkQKBgQDvCPrGM2IaKCfkVpXs\n\
+        zZcYKNoukL7ID/H+LWByoQHF1O6tBI5VAuduEB5K/J4SrqZcWC1PdiscEdRQh5Ik\n\
+        Q2Jrpg2djzCxg6rDI88piOm9+UBH09YjxIITYI9q74prsWC+8dJbiGruOWEZp4On\n\
+        VXuE7OE9aUcNkkpRV/gOcvwGsQKBgQC+A5eax4nJfCZ9Zroypd8sN/7i/bJbkr+s\n\
+        38jRtJreJRahOTccO3I9yDo0idVlLoubFlokl55gjwu4IOBYbY3mg8Ka8shZe5v8\n\
+        x6MZPlwDXt4OTR2QEJcN3QQgon3wpG7gbzjRR8syi4fDESe1kVVTRnOIS6kKfBAl\n\
+        SXLHpM6SlQKBgG9LbQevkPPA0qIcNn4lUz5qdvvLZSjdU70W/5sfoCWueNqSDntC\n\
+        eOLkGlarvCXSr567Z41h5bySCJreJItB3Kdmj1xW+UMNnQpyt9gM6VgMn4NR/Jh2\n\
+        vGGtSdluYrK1yefdzCXWJIN6r900A7Z7tKE1ccIYLH8DKBsrrFF99B5hAoGAJqsi\n\
+        ehwrXTaHurNiJxZ8cUo/87+/QUV+/lZYTtzbO2P+0/aJ0ZQDbrFFrxVxuPKc9IW6\n\
+        +IFmeK4Dq4f9P+GjpAqiWtgXj6ZJG0shVOzM2t6+f9iPsJa/ttGImn+W85by/XeE\n\
+        74oVvwaILVlbZGbcH2NR9aW4E+slegEVe619YHUCgYBwOo5Czo4tDLTI0AYwx/on\n\
+        a1JhoEeS1o3f/BfneofQqOFFeATUmU52tidm8G4wSGfkCKRtj3w8JP+gpSXJ6v6G\n\
+        imOfWTISM8OrQHS4RmPK+mRor4a7Pf930DCF6W2PRXZgYdBw7Gs6TnClpy5RXslE\n\
+        LQR3iiL0OLIZDwiYlfBWLA==\n\
+        -----END PRIVATE KEY-----";
+
+        let priv_key = jsonwebtoken::EncodingKey::from_rsa_pem(pem).unwrap();
+        let mut header = jsonwebtoken::Header::new(jsonwebtoken::Algorithm::RS256);
+        header.kid = Some("valid_kid".to_string());
+        let exp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() + 3600;
+        let claims = serde_json::json!({
+            "iss": "https://appleid.apple.com", "aud": "client_id", "exp": exp,
+            "sub": "apple_sub_refreshed", "email": "apple@example.com"
+        });
+        let id_token = jsonwebtoken::encode(&header, &claims, &priv_key).unwrap();
+
+        struct MockRefreshClient {
+            id_token: String,
+        }
+        #[async_trait]
+        impl HttpClient for MockRefreshClient {
+            async fn execute(&self, req: HttpRequest) -> Result<HttpResponse, crate::error::ConnectError> {
+                if req.url.contains("token") {
+                    Ok(HttpResponse {
+                        status: 200,
+                        body: serde_json::json!({
+                            "access_token": self.id_token,
+                            "refresh_token": "new_refresh",
+                            "expires_in": 3600
+                        }),
+                    })
+                } else if req.url.contains("keys") {
+                    Ok(HttpResponse {
+                        status: 200,
+                        body: serde_json::json!({
+                            "keys": [{
+                                "kid": "valid_kid", "kty": "RSA", "alg": "RS256",
+                                "n": "sWwEyNwXz_oht6BVZqJiGoKVFRWyeesgSgJYcM4GwWS_Y45iEkZdbYuPlewORhVz8JE7tfTmVVInRmLDAoAEeTB-knrZPjaL0poZmCiCGbbNOa8lUXPbJJrYFbQlGhwMOBfZOpeJcjat3xuJRtqkmaq6_bGu9BfJGUOwzZ3rP835JChqR_oOmUpcC6EPR9BB0pdrvBYZ_tlsKhgmNJI6dtK1NfQTiIr4tj49IiSaVCI2cyIxKf2kzWu5j9YfqKtcTUlqQkO26WCcdBjO2NLRiV0Sn-QLGPlQJ0oDmQjD_SUO9xnsNmtIpbdkH6J-nrKH0wW9FQW79617Up6qbu7XBQ",
+                                "e": "AQAB"
+                            }]
+                        }),
+                    })
+                } else {
+                    Ok(HttpResponse { status: 200, body: serde_json::json!({}) })
+                }
+            }
+        }
+
+        let ec_pem = "-----BEGIN PRIVATE KEY-----\n\
+MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgkdn4ngP0MJj/+G/Z\n\
+0FgfmUYbc26Oidgl0NZoUXoMm6KhRANCAARcJ2gzcG1e8qufjKrOWQSmC4OoQkAU\n\
+k/Tz7c8S43tqF0VK/mNC462881k2cryVtuV5FkH1XoPACJzJUQ5igUZV\n\
+-----END PRIVATE KEY-----";
+
+        let provider = AppleProvider::new("client_id".to_string(), "team_id".to_string(), "key_id".to_string(), ec_pem.to_string(), "https://redirect.url".to_string())
+            .with_http_client(std::sync::Arc::new(MockRefreshClient { id_token }));
+
+        let user = provider.refresh_token("old_refresh").await.unwrap();
+        assert_eq!(user.id, "apple_sub_refreshed");
+        use secrecy::ExposeSecret;
+        assert_eq!(user.refresh_token.unwrap().expose_secret(), "new_refresh");
+    }
+
+    #[tokio::test]
+    async fn test_apple_refresh_token_error() {
+        struct MockRefreshErrorClient;
+        #[async_trait]
+        impl HttpClient for MockRefreshErrorClient {
+            async fn execute(&self, req: HttpRequest) -> Result<HttpResponse, crate::error::ConnectError> {
+                if req.url.contains("token") {
+                    Ok(HttpResponse {
+                        status: 400,
+                        body: serde_json::json!({
+                            "error": "invalid_grant",
+                            "error_description": "refresh token is invalid"
+                        }),
+                    })
+                } else {
+                    Ok(HttpResponse { status: 200, body: serde_json::json!({}) })
+                }
+            }
+        }
+
+        let ec_pem = "-----BEGIN PRIVATE KEY-----\n\
+MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgkdn4ngP0MJj/+G/Z\n\
+0FgfmUYbc26Oidgl0NZoUXoMm6KhRANCAARcJ2gzcG1e8qufjKrOWQSmC4OoQkAU\n\
+k/Tz7c8S43tqF0VK/mNC462881k2cryVtuV5FkH1XoPACJzJUQ5igUZV\n\
+-----END PRIVATE KEY-----";
+
+        let provider = AppleProvider::new("client_id".to_string(), "team_id".to_string(), "key_id".to_string(), ec_pem.to_string(), "https://redirect.url".to_string())
+            .with_http_client(std::sync::Arc::new(MockRefreshErrorClient));
+
+        let res = provider.refresh_token("old_refresh").await;
+        assert!(res.is_err());
+        let err = res.unwrap_err();
+        assert!(matches!(err, crate::error::ConnectError::ProviderApiError { .. }));
+    }
 }

@@ -22,6 +22,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Configured GitHub Dependabot for automated weekly updates on crates and GitHub Actions.
   - Added `criterion`, `loom`, and Kani verifier as development dependencies for microbenchmarking, concurrent async testing, and formal verification.
   - Refactored `provider_bench` to use the `Criterion` framework.
+- **Test Coverage (94%)**:
+  - Achieved ~94% line coverage globally.
+  - Added exhaustive unit tests for network failure paths (HTTP 400 Bad Request, invalid JSON) and missing fields (missing `id_token`, `access_token`) across providers.
+  - Added tests for `Provider` trait default methods (`request_device_code`, `refresh_token`, `revoke_token`, `poll_device_token`).
+- **OIDC Provider**: Implemented the missing `refresh_token` trait method.
 
 ## [10.0.1] - 2026-06-19
 

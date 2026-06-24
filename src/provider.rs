@@ -431,6 +431,41 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn test_default_request_device_code() {
+        let provider = DummyProvider {
+            base_url: "".to_string(),
+        };
+        let result = provider.request_device_code().await;
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ConnectError::Provider(msg) => {
+                assert_eq!(
+                    msg,
+                    "Device Authorization is not supported by this provider"
+                );
+            }
+            _ => panic!("Expected ConnectError::Provider"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_default_refresh_token() {
+        let provider = DummyProvider {
+            base_url: "".to_string(),
+        };
+        let result = provider.refresh_token("some_token").await;
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ConnectError::Token(msg) => {
+                assert_eq!(msg, "Refresh token is not supported by this provider");
+            }
+            _ => panic!("Expected ConnectError::Token"),
+        }
+    }
+
     #[test]
     fn test_redirect_url_with_pkce_and_state_multiple_query_params() {
         let provider_multiple_query = DummyProvider {
@@ -481,7 +516,7 @@ mod tests {
         ) -> Result<crate::client::HttpResponse, crate::error::ConnectError> {
             if req.url.contains("error") {
                 Ok(crate::client::HttpResponse {
-                    status: 400,
+                    status: 200,
                     body: serde_json::json!({
                         "error": "invalid_request",
                         "error_description": "Test error"
@@ -521,6 +556,31 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_fetch_access_token_error() {
+        let client = MockFetchClient;
+        let form = TokenExchangeForm {
+            client_id: "client_id",
+            client_secret: Some("client_secret"),
+            code: "auth_code",
+            grant_type: Some("authorization_code"),
+            redirect_uri: "https://redirect",
+            code_verifier: Some("verifier"),
+        };
+        // Use a URL with "error" so the mock returns the error JSON.
+        let err = fetch_access_token(&client, "https://example.com/error", &form)
+            .await
+            .unwrap_err();
+
+        match err {
+            ConnectError::Token(msg) => {
+                assert!(msg.contains("invalid_request"));
+                assert!(msg.contains("Test error"));
+            }
+            _ => panic!("Expected ConnectError::Token"),
+        }
+    }
+
+    #[tokio::test]
     async fn test_fetch_refresh_token() {
         let client = MockFetchClient;
         let res = fetch_refresh_token(
@@ -536,5 +596,208 @@ mod tests {
         assert_eq!(res.access_token, "mock_access");
         assert_eq!(res.refresh_token.as_deref(), Some("mock_refresh"));
         assert_eq!(res.expires_in, Some(3600));
+    }
+
+    #[tokio::test]
+    async fn test_fetch_refresh_token_error() {
+        let client = MockFetchClient;
+        let err = fetch_refresh_token(
+            &client,
+            "https://example.com/error",
+            "client_id",
+            "client_secret",
+            "mock_refresh",
+        )
+        .await
+        .unwrap_err();
+
+        match err {
+            ConnectError::Token(msg) => {
+                assert!(msg.contains("invalid_request"));
+                assert!(msg.contains("Test error"));
+            }
+            _ => panic!("Expected ConnectError::Token"),
+        }
+    }
+
+    struct MockFetchClientMissingToken;
+    #[async_trait]
+    impl crate::client::HttpClient for MockFetchClientMissingToken {
+        async fn execute(
+            &self,
+            _req: crate::client::HttpRequest,
+        ) -> Result<crate::client::HttpResponse, crate::error::ConnectError> {
+            Ok(crate::client::HttpResponse {
+                status: 200,
+                body: serde_json::json!({
+                    "expires_in": 3600
+                }),
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn test_fetch_access_token_missing() {
+        let client = MockFetchClientMissingToken;
+        let form = TokenExchangeForm {
+            client_id: "client_id",
+            client_secret: Some("client_secret"),
+            code: "auth_code",
+            grant_type: Some("authorization_code"),
+            redirect_uri: "https://redirect",
+            code_verifier: Some("verifier"),
+        };
+        let err = fetch_access_token(&client, "https://example.com/token", &form)
+            .await
+            .unwrap_err();
+
+        match err {
+            ConnectError::Token(msg) => assert_eq!(msg, "Failed to get access_token"),
+            _ => panic!("Expected ConnectError::Token"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_fetch_refresh_token_missing() {
+        let client = MockFetchClientMissingToken;
+        let err = fetch_refresh_token(
+            &client,
+            "https://example.com/token",
+            "client_id",
+            "client_secret",
+            "mock_refresh",
+        )
+        .await
+        .unwrap_err();
+
+        match err {
+            ConnectError::Token(msg) => assert_eq!(msg, "Failed to get access_token during refresh"),
+            _ => panic!("Expected ConnectError::Token"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_exchange_and_get_user() {
+        struct MockUserClient;
+        #[async_trait]
+        impl crate::client::HttpClient for MockUserClient {
+            async fn execute(&self, req: crate::client::HttpRequest) -> Result<crate::client::HttpResponse, crate::error::ConnectError> {
+                if req.url.contains("token") {
+                    Ok(crate::client::HttpResponse {
+                        status: 200,
+                        body: serde_json::json!({
+                            "access_token": "mock_access",
+                            "refresh_token": "mock_refresh",
+                            "expires_in": 3600
+                        }),
+                    })
+                } else if req.url.contains("user") {
+                    Ok(crate::client::HttpResponse {
+                        status: 200,
+                        body: serde_json::json!({
+                            "id": "123",
+                            "name": "Test User"
+                        }),
+                    })
+                } else {
+                    Err(crate::error::ConnectError::Provider("Unexpected URL".to_string()))
+                }
+            }
+        }
+
+        struct SimpleProvider;
+        #[async_trait]
+        impl Provider for SimpleProvider {
+            fn redirect_url(&self) -> String { "".into() }
+            fn token_url(&self) -> String { "".into() }
+            async fn get_user(&self, _params: ExchangeParams<'_>) -> Result<ConnectUser, ConnectError> { unimplemented!() }
+            async fn get_user_from_token(&self, access_token: &str) -> Result<ConnectUser, ConnectError> {
+                Ok(ConnectUser {
+                    id: "123".into(),
+                    name: "Test User".into(),
+                    email: None,
+                    avatar_url: None,
+                    email_verified: Some(false),
+                    raw_data: serde_json::json!({}),
+                    access_token: secrecy::SecretString::from(access_token.to_string()),
+                    refresh_token: None,
+                    expires_in: None,
+                })
+            }
+        }
+
+        let form = TokenExchangeForm {
+            client_id: "client",
+            client_secret: None,
+            code: "code",
+            grant_type: None,
+            redirect_uri: "redirect",
+            code_verifier: None,
+        };
+
+        let user = exchange_and_get_user(&SimpleProvider, &MockUserClient, "https://example.com/token", &form, None).await.unwrap();
+        assert_eq!(user.id, "123");
+        use secrecy::ExposeSecret;
+        assert_eq!(user.access_token.expose_secret(), "mock_access");
+        assert_eq!(user.refresh_token.unwrap().expose_secret(), "mock_refresh");
+        assert_eq!(user.expires_in, Some(3600));
+    }
+
+    #[tokio::test]
+    async fn test_refresh_and_get_user() {
+        struct MockUserClient;
+        #[async_trait]
+        impl crate::client::HttpClient for MockUserClient {
+            async fn execute(&self, req: crate::client::HttpRequest) -> Result<crate::client::HttpResponse, crate::error::ConnectError> {
+                if req.url.contains("token") {
+                    Ok(crate::client::HttpResponse {
+                        status: 200,
+                        body: serde_json::json!({
+                            "access_token": "refreshed_access",
+                            "refresh_token": "refreshed_refresh",
+                            "expires_in": 3600
+                        }),
+                    })
+                } else if req.url.contains("user") {
+                    Ok(crate::client::HttpResponse {
+                        status: 200,
+                        body: serde_json::json!({
+                            "id": "123",
+                            "name": "Test User"
+                        }),
+                    })
+                } else {
+                    Err(crate::error::ConnectError::Provider("Unexpected URL".to_string()))
+                }
+            }
+        }
+
+        struct SimpleProvider;
+        #[async_trait]
+        impl Provider for SimpleProvider {
+            fn redirect_url(&self) -> String { "".into() }
+            fn token_url(&self) -> String { "".into() }
+            async fn get_user(&self, _params: ExchangeParams<'_>) -> Result<ConnectUser, ConnectError> { unimplemented!() }
+            async fn get_user_from_token(&self, access_token: &str) -> Result<ConnectUser, ConnectError> {
+                Ok(ConnectUser {
+                    id: "123".into(),
+                    name: "Test User".into(),
+                    email: None,
+                    avatar_url: None,
+                    email_verified: Some(false),
+                    raw_data: serde_json::json!({}),
+                    access_token: secrecy::SecretString::from(access_token.to_string()),
+                    refresh_token: None,
+                    expires_in: None,
+                })
+            }
+        }
+
+        let user = refresh_and_get_user(&SimpleProvider, &MockUserClient, "https://example.com/token", "client_id", &secrecy::SecretString::from("secret".to_string()), "old_refresh").await.unwrap();
+        assert_eq!(user.id, "123");
+        use secrecy::ExposeSecret;
+        assert_eq!(user.access_token.expose_secret(), "refreshed_access");
+        assert_eq!(user.refresh_token.unwrap().expose_secret(), "refreshed_refresh");
+        assert_eq!(user.expires_in, Some(3600));
     }
 }

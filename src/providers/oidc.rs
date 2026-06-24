@@ -342,6 +342,21 @@ impl Provider for OidcProvider {
     fn token_url(&self) -> String {
         self.token_endpoint.clone()
     }
+
+    async fn refresh_token(
+        &self,
+        refresh_token: &str,
+    ) -> Result<ConnectUser, ConnectError> {
+        let form_data = crate::provider::TokenExchangeForm {
+            client_id: self.client_id.as_str(),
+            client_secret: Some(secrecy::ExposeSecret::expose_secret(&self.client_secret)),
+            code: refresh_token,
+            grant_type: Some("refresh_token"),
+            redirect_uri: self.redirect_url.as_str(),
+            code_verifier: None,
+        };
+        self.get_user_from_form(&form_data, None).await
+    }
 }
 
 #[cfg(test)]
@@ -349,6 +364,7 @@ mod tests {
     use super::*;
     use serde_json::json;
     use std::sync::Arc;
+    use crate::client::{HttpRequest, HttpResponse};
 
     struct MockOidcClient {
         config_body: Value,
@@ -372,6 +388,44 @@ mod tests {
                 Ok(crate::client::HttpResponse {
                     status: 200,
                     body: self.jwks_body.clone(),
+                })
+            } else if req.url.contains("missing_id") {
+                Ok(crate::client::HttpResponse {
+                    status: 200,
+                    body: json!({"name": "No ID User"}),
+                })
+            } else if req.url.contains("error_token") {
+                Ok(crate::client::HttpResponse {
+                    status: 400,
+                    body: json!({"error": "invalid_grant"}),
+                })
+            } else if req.url.contains("refresh_token_test") {
+                Ok(crate::client::HttpResponse {
+                    status: 200,
+                    body: json!({
+                        "access_token": "new_access_token",
+                        "refresh_token": "new_refresh_token",
+                        "expires_in": 3600
+                    }),
+                })
+            } else if req.url.contains("token") {
+                Ok(crate::client::HttpResponse {
+                    status: 200,
+                    body: json!({
+                        "access_token": "mock_access_token",
+                        "expires_in": 3600
+                    }),
+                })
+            } else if req.url.contains("userinfo") {
+                Ok(crate::client::HttpResponse {
+                    status: 200,
+                    body: json!({
+                        "sub": "user_123",
+                        "name": "Test User",
+                        "email": "test@example.com",
+                        "picture": "https://avatar.url",
+                        "email_verified": true
+                    }),
                 })
             } else {
                 Err(crate::error::ConnectError::Provider(
@@ -482,5 +536,456 @@ mod tests {
             Err(_) => panic!("Expected Provider error variant"),
             Ok(_) => panic!("Expected an error, but discover succeeded"),
         }
+    }
+
+    #[tokio::test]
+    async fn test_oidc_discover_invalid_args() {
+        let mock_client = Arc::new(MockOidcClient {
+            config_body: json!({}),
+            jwks_body: json!({}),
+            captured_urls: tokio::sync::Mutex::new(vec![]),
+        });
+
+        assert!(OidcProvider::discover_with_client(
+            "invalid_url", "id".to_string(), "secret".to_string(), "http://redirect".to_string(), mock_client.clone()
+        ).await.is_err());
+
+        assert!(OidcProvider::discover_with_client(
+            "http://issuer", "id".to_string(), "secret".to_string(), "invalid_redirect".to_string(), mock_client.clone()
+        ).await.is_err());
+
+        assert!(OidcProvider::discover_with_client(
+            "http://issuer", "".to_string(), "secret".to_string(), "http://redirect".to_string(), mock_client.clone()
+        ).await.is_err());
+
+        assert!(OidcProvider::discover_with_client(
+            "http://issuer", "id".to_string(), "".to_string(), "http://redirect".to_string(), mock_client.clone()
+        ).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_oidc_get_user_success() {
+        let mock_client = Arc::new(MockOidcClient {
+            config_body: json!({
+                "authorization_endpoint": "https://auth.com/authorize",
+                "token_endpoint": "https://auth.com/token",
+                "userinfo_endpoint": "https://auth.com/userinfo",
+                "jwks_uri": "https://auth.com/jwks",
+                "issuer": "https://issuer.com"
+            }),
+            jwks_body: json!({"keys": []}),
+            captured_urls: tokio::sync::Mutex::new(vec![]),
+        });
+
+        let provider = OidcProvider::discover_with_client(
+            "https://issuer.com",
+            "client_id".to_string(),
+            "client_secret".to_string(),
+            "https://redirect.url".to_string(),
+            mock_client.clone(),
+        ).await.unwrap();
+
+        let user = provider.get_user(crate::provider::ExchangeParams {
+            auth_code: "code",
+            ..Default::default()
+        }).await.unwrap();
+
+        assert_eq!(user.id, "user_123");
+        assert_eq!(user.name, "Test User");
+        assert_eq!(user.email.as_deref(), Some("test@example.com"));
+    }
+
+    #[tokio::test]
+    async fn test_oidc_token_error() {
+        let mock_client = Arc::new(MockOidcClient {
+            config_body: json!({
+                "authorization_endpoint": "https://auth.com/authorize",
+                "token_endpoint": "https://auth.com/error_token", // use special token URL
+                "userinfo_endpoint": "https://auth.com/userinfo",
+                "jwks_uri": "https://auth.com/jwks",
+                "issuer": "https://issuer.com"
+            }),
+            jwks_body: json!({"keys": []}),
+            captured_urls: tokio::sync::Mutex::new(vec![]),
+        });
+
+        let provider = OidcProvider::discover_with_client(
+            "https://issuer.com",
+            "client_id".to_string(),
+            "client_secret".to_string(),
+            "https://redirect.url".to_string(),
+            mock_client.clone(),
+        ).await.unwrap();
+
+        let err = provider.get_user(crate::provider::ExchangeParams {
+            auth_code: "code",
+            ..Default::default()
+        }).await.unwrap_err();
+
+        assert!(matches!(err, crate::error::ConnectError::ProviderApiError { .. }));
+    }
+
+    #[tokio::test]
+    async fn test_oidc_refresh_token_success() {
+        let mock_client = Arc::new(MockOidcClient {
+            config_body: json!({
+                "authorization_endpoint": "https://auth.com/authorize",
+                "token_endpoint": "https://auth.com/refresh_token_test", // use special refresh token URL
+                "userinfo_endpoint": "https://auth.com/userinfo",
+                "jwks_uri": "https://auth.com/jwks",
+                "issuer": "https://issuer.com"
+            }),
+            jwks_body: json!({"keys": []}),
+            captured_urls: tokio::sync::Mutex::new(vec![]),
+        });
+
+        let provider = OidcProvider::discover_with_client(
+            "https://issuer.com",
+            "client_id".to_string(),
+            "client_secret".to_string(),
+            "https://redirect.url".to_string(),
+            mock_client.clone(),
+        ).await.unwrap();
+
+        let user = provider.refresh_token("old_refresh").await.unwrap();
+
+        assert_eq!(user.id, "user_123");
+        assert_eq!(user.name, "Test User");
+        use secrecy::ExposeSecret;
+        assert_eq!(user.refresh_token.unwrap().expose_secret(), "new_refresh_token");
+    }
+
+    #[tokio::test]
+    async fn test_oidc_missing_id() {
+        let mock_client = Arc::new(MockOidcClient {
+            config_body: json!({
+                "authorization_endpoint": "https://auth.com/authorize",
+                "token_endpoint": "https://auth.com/token",
+                "userinfo_endpoint": "https://auth.com/missing_id_userinfo", // use special missing ID url
+                "jwks_uri": "https://auth.com/jwks",
+                "issuer": "https://issuer.com"
+            }),
+            jwks_body: json!({"keys": []}),
+            captured_urls: tokio::sync::Mutex::new(vec![]),
+        });
+
+        let provider = OidcProvider::discover_with_client(
+            "https://issuer.com",
+            "client_id".to_string(),
+            "client_secret".to_string(),
+            "https://redirect.url".to_string(),
+            mock_client.clone(),
+        ).await.unwrap();
+
+        let err = provider.get_user(crate::provider::ExchangeParams {
+            auth_code: "code",
+            ..Default::default()
+        }).await.unwrap_err();
+
+        assert!(matches!(err, crate::error::ConnectError::Provider(_)));
+    }
+
+    #[tokio::test]
+    async fn test_oidc_id_token_invalid_jwt() {
+        let mock_client = Arc::new(MockOidcClient {
+            config_body: json!({
+                "authorization_endpoint": "https://auth.com/authorize",
+                "token_endpoint": "https://auth.com/token_invalid_jwt",
+                "userinfo_endpoint": "https://auth.com/userinfo",
+                "jwks_uri": "https://auth.com/jwks",
+                "issuer": "https://issuer.com"
+            }),
+            jwks_body: json!({"keys": []}),
+            captured_urls: tokio::sync::Mutex::new(vec![]),
+        });
+
+        struct InvalidJwtClient;
+        #[async_trait]
+        impl HttpClient for InvalidJwtClient {
+            async fn execute(&self, req: HttpRequest) -> Result<HttpResponse, ConnectError> {
+                if req.url.contains("token_invalid_jwt") {
+                    Ok(HttpResponse {
+                        status: 200,
+                        body: json!({
+                            "access_token": "mock_access_token",
+                            "id_token": "invalid_jwt_format"
+                        }),
+                    })
+                } else if req.url.contains("openid-configuration") {
+                    Ok(HttpResponse {
+                        status: 200,
+                        body: json!({
+                            "authorization_endpoint": "https://auth.com/authorize",
+                            "token_endpoint": "https://auth.com/token_invalid_jwt",
+                            "userinfo_endpoint": "https://auth.com/userinfo",
+                            "jwks_uri": "https://auth.com/jwks",
+                            "issuer": "https://issuer.com"
+                        }),
+                    })
+                } else {
+                    Ok(HttpResponse { status: 200, body: json!({}) })
+                }
+            }
+        }
+
+        let provider = OidcProvider::discover_with_client(
+            "https://issuer.com",
+            "client_id".to_string(),
+            "client_secret".to_string(),
+            "https://redirect.url".to_string(),
+            Arc::new(InvalidJwtClient),
+        ).await.unwrap();
+
+        let err = provider.get_user(crate::provider::ExchangeParams {
+            auth_code: "code",
+            ..Default::default()
+        }).await.unwrap_err();
+
+        assert!(matches!(err, crate::error::ConnectError::Provider(msg) if msg.contains("Failed to decode OIDC id_token header")));
+    }
+
+    #[tokio::test]
+    async fn test_oidc_id_token_missing_kid() {
+        let id_token = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjMifQ.ZHVtbXk".to_string();
+
+        struct MissingKidClient(String);
+        #[async_trait]
+        impl HttpClient for MissingKidClient {
+            async fn execute(&self, req: HttpRequest) -> Result<HttpResponse, ConnectError> {
+                if req.url.contains("token") {
+                    Ok(HttpResponse {
+                        status: 200,
+                        body: json!({
+                            "access_token": "mock_access_token",
+                            "id_token": self.0
+                        }),
+                    })
+                } else if req.url.contains("openid-configuration") {
+                    Ok(HttpResponse {
+                        status: 200,
+                        body: json!({
+                            "authorization_endpoint": "https://auth.com/authorize",
+                            "token_endpoint": "https://auth.com/token",
+                            "userinfo_endpoint": "https://auth.com/userinfo",
+                            "jwks_uri": "https://auth.com/jwks",
+                            "issuer": "https://issuer.com"
+                        }),
+                    })
+                } else {
+                    Ok(HttpResponse { status: 200, body: json!({}) })
+                }
+            }
+        }
+
+        let provider = OidcProvider::discover_with_client(
+            "https://issuer.com",
+            "client_id".to_string(),
+            "client_secret".to_string(),
+            "https://redirect.url".to_string(),
+            Arc::new(MissingKidClient(id_token)),
+        ).await.unwrap();
+
+        let err = provider.get_user(crate::provider::ExchangeParams {
+            auth_code: "code",
+            ..Default::default()
+        }).await.unwrap_err();
+
+        assert!(matches!(err, crate::error::ConnectError::Provider(msg) if msg.contains("Missing 'kid' header")));
+    }
+
+    #[tokio::test]
+    async fn test_oidc_id_token_kid_not_found() {
+        let id_token = "eyJhbGciOiJIUzI1NiIsImtpZCI6Im5vbl9leGlzdGVudF9raWQifQ.eyJzdWIiOiIxMjMifQ.ZHVtbXk".to_string();
+
+        struct KidNotFoundClient(String);
+        #[async_trait]
+        impl HttpClient for KidNotFoundClient {
+            async fn execute(&self, req: HttpRequest) -> Result<HttpResponse, ConnectError> {
+                if req.url.contains("token") {
+                    Ok(HttpResponse {
+                        status: 200,
+                        body: json!({
+                            "access_token": "mock_access_token",
+                            "id_token": self.0
+                        }),
+                    })
+                } else if req.url.contains("openid-configuration") {
+                    Ok(HttpResponse {
+                        status: 200,
+                        body: json!({
+                            "authorization_endpoint": "https://auth.com/authorize",
+                            "token_endpoint": "https://auth.com/token",
+                            "userinfo_endpoint": "https://auth.com/userinfo",
+                            "jwks_uri": "https://auth.com/jwks",
+                            "issuer": "https://issuer.com"
+                        }),
+                    })
+                } else if req.url.contains("jwks") {
+                    Ok(HttpResponse {
+                        status: 200,
+                        body: json!({
+                            "keys": [
+                                {
+                                    "kid": "other_kid",
+                                    "kty": "RSA",
+                                    "n": "123",
+                                    "e": "AQAB"
+                                }
+                            ]
+                        }),
+                    })
+                } else {
+                    Ok(HttpResponse { status: 200, body: json!({}) })
+                }
+            }
+        }
+
+        let provider = OidcProvider::discover_with_client(
+            "https://issuer.com",
+            "client_id".to_string(),
+            "client_secret".to_string(),
+            "https://redirect.url".to_string(),
+            Arc::new(KidNotFoundClient(id_token)),
+        ).await.unwrap();
+
+        let err = provider.get_user(crate::provider::ExchangeParams {
+            auth_code: "code",
+            ..Default::default()
+        }).await.unwrap_err();
+
+        assert!(matches!(err, crate::error::ConnectError::Provider(msg) if msg.contains("not found")));
+    }
+
+    #[tokio::test]
+    async fn test_oidc_id_token_valid() {
+        let pem = b"-----BEGIN PRIVATE KEY-----\n\
+        MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCxbATI3BfP+iG3\n\
+        oFVmomIagpUVFbJ56yBKAlhwzgbBZL9jjmISRl1ti4+V7A5GFXPwkTu19OZVUidG\n\
+        YsMCgAR5MH6Setk+NovSmhmYKIIZts05ryVRc9skmtgVtCUaHAw4F9k6l4lyNq3f\n\
+        G4lG2qSZqrr9sa70F8kZQ7DNnes/zfkkKGpH+g6ZSlwLoQ9H0EHSl2u8Fhn+2Wwq\n\
+        GCY0kjp20rU19BOIivi2Pj0iJJpUIjZzIjEp/aTNa7mP1h+oq1xNSWpCQ7bpYJx0\n\
+        GM7Y0tGJXRKf5AsY+VAnSgOZCMP9JQ73Gew2a0ilt2Qfon6esofTBb0VBbv3rXtS\n\
+        nqpu7tcFAgMBAAECggEACJNjzNCknwMkX5OSpS4ap1Th/12n3ZBBpIol+7fdqDnm\n\
+        LVn7wA3iJLIe+9xn2TfevYVLmVEv0/ZvWw3ZhrSo4rG3IH3rI8BvtDuKGqp0lWka\n\
+        VNw0JdJ/iG6qnKvzMiaiaZCviY87D8f4UgUq9r+JPrs7pBkTT42ZxQyaTmoAbbpC\n\
+        gE5afzy801AdqmzrlrxNzZJpmfS0CsLKKQub49LDlh84h6z7X7Iv2Lbq2gxvEcgt\n\
+        h5uyIduciICtCZYtkaNbC1lnj/ecBSoAWKOSOCP1ISg65LjZwvhiVB4jgZUhrXsp\n\
+        9FscocRWe92HunCeEt0IB+Q+JMkO/e9rFeSfMiIYkQKBgQDvCPrGM2IaKCfkVpXs\n\
+        zZcYKNoukL7ID/H+LWByoQHF1O6tBI5VAuduEB5K/J4SrqZcWC1PdiscEdRQh5Ik\n\
+        Q2Jrpg2djzCxg6rDI88piOm9+UBH09YjxIITYI9q74prsWC+8dJbiGruOWEZp4On\n\
+        VXuE7OE9aUcNkkpRV/gOcvwGsQKBgQC+A5eax4nJfCZ9Zroypd8sN/7i/bJbkr+s\n\
+        38jRtJreJRahOTccO3I9yDo0idVlLoubFlokl55gjwu4IOBYbY3mg8Ka8shZe5v8\n\
+        x6MZPlwDXt4OTR2QEJcN3QQgon3wpG7gbzjRR8syi4fDESe1kVVTRnOIS6kKfBAl\n\
+        SXLHpM6SlQKBgG9LbQevkPPA0qIcNn4lUz5qdvvLZSjdU70W/5sfoCWueNqSDntC\n\
+        eOLkGlarvCXSr567Z41h5bySCJreJItB3Kdmj1xW+UMNnQpyt9gM6VgMn4NR/Jh2\n\
+        vGGtSdluYrK1yefdzCXWJIN6r900A7Z7tKE1ccIYLH8DKBsrrFF99B5hAoGAJqsi\n\
+        ehwrXTaHurNiJxZ8cUo/87+/QUV+/lZYTtzbO2P+0/aJ0ZQDbrFFrxVxuPKc9IW6\n\
+        +IFmeK4Dq4f9P+GjpAqiWtgXj6ZJG0shVOzM2t6+f9iPsJa/ttGImn+W85by/XeE\n\
+        74oVvwaILVlbZGbcH2NR9aW4E+slegEVe619YHUCgYBwOo5Czo4tDLTI0AYwx/on\n\
+        a1JhoEeS1o3f/BfneofQqOFFeATUmU52tidm8G4wSGfkCKRtj3w8JP+gpSXJ6v6G\n\
+        imOfWTISM8OrQHS4RmPK+mRor4a7Pf930DCF6W2PRXZgYdBw7Gs6TnClpy5RXslE\n\
+        LQR3iiL0OLIZDwiYlfBWLA==\n\
+        -----END PRIVATE KEY-----";
+
+        let n_val = "sWwEyNwXz_oht6BVZqJiGoKVFRWyeesgSgJYcM4GwWS_Y45iEkZdbYuPlewORhVz8JE7tfTmVVInRmLDAoAEeTB-knrZPjaL0poZmCiCGbbNOa8lUXPbJJrYFbQlGhwMOBfZOpeJcjat3xuJRtqkmaq6_bGu9BfJGUOwzZ3rP835JChqR_oOmUpcC6EPR9BB0pdrvBYZ_tlsKhgmNJI6dtK1NfQTiIr4tj49IiSaVCI2cyIxKf2kzWu5j9YfqKtcTUlqQkO26WCcdBjO2NLRiV0Sn-QLGPlQJ0oDmQjD_SUO9xnsNmtIpbdkH6J-nrKH0wW9FQW79617Up6qbu7XBQ";
+        let e_val = "AQAB";
+
+        let priv_key = jsonwebtoken::EncodingKey::from_rsa_pem(pem).unwrap();
+        let mut header = jsonwebtoken::Header::new(jsonwebtoken::Algorithm::RS256);
+        header.kid = Some("valid_kid".to_string());
+        
+        let exp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() + 3600;
+
+        let claims = json!({
+            "iss": "https://issuer.com",
+            "aud": "client_id",
+            "exp": exp,
+            "sub": "oidc_user_123",
+            "name": "OIDC User",
+            "email": "oidc@example.com",
+            "picture": "https://oidc.avatar",
+            "email_verified": true,
+            "nonce": "test_nonce"
+        });
+
+        let id_token = jsonwebtoken::encode(&header, &claims, &priv_key).unwrap();
+
+        struct ValidOidcClient {
+            id_token: String,
+            n: String,
+            e: String,
+        }
+        #[async_trait]
+        impl HttpClient for ValidOidcClient {
+            async fn execute(&self, req: HttpRequest) -> Result<HttpResponse, crate::error::ConnectError> {
+                if req.url.contains("token") {
+                    Ok(HttpResponse {
+                        status: 200,
+                        body: json!({
+                            "access_token": "mock_access_token",
+                            "id_token": self.id_token
+                        }),
+                    })
+                } else if req.url.contains("openid-configuration") {
+                    Ok(HttpResponse {
+                        status: 200,
+                        body: json!({
+                            "authorization_endpoint": "https://auth.com/authorize",
+                            "token_endpoint": "https://auth.com/token",
+                            "userinfo_endpoint": "https://auth.com/userinfo",
+                            "jwks_uri": "https://auth.com/jwks",
+                            "issuer": "https://issuer.com"
+                        }),
+                    })
+                } else if req.url.contains("jwks") {
+                    Ok(HttpResponse {
+                        status: 200,
+                        body: json!({
+                            "keys": [
+                                {
+                                    "kid": "valid_kid",
+                                    "kty": "RSA",
+                                    "alg": "RS256",
+                                    "n": self.n,
+                                    "e": self.e
+                                }
+                            ]
+                        }),
+                    })
+                } else {
+                    Ok(HttpResponse { status: 200, body: json!({}) })
+                }
+            }
+        }
+
+        let provider = OidcProvider::discover_with_client(
+            "https://issuer.com",
+            "client_id".to_string(),
+            "client_secret".to_string(),
+            "https://redirect.url".to_string(),
+            Arc::new(ValidOidcClient {
+                id_token,
+                n: n_val.to_string(),
+                e: e_val.to_string(),
+            }),
+        ).await.unwrap();
+
+        let user = provider.get_user(crate::provider::ExchangeParams {
+            auth_code: "code",
+            expected_nonce: Some("test_nonce"),
+            ..Default::default()
+        }).await.unwrap();
+
+        assert_eq!(user.id, "oidc_user_123");
+        assert_eq!(user.name, "OIDC User");
+        assert_eq!(user.email.as_deref(), Some("oidc@example.com"));
+
+        // Test Nonce Mismatch
+        let err = provider.get_user(crate::provider::ExchangeParams {
+            auth_code: "code",
+            expected_nonce: Some("wrong_nonce"),
+            ..Default::default()
+        }).await.unwrap_err();
+        assert!(matches!(err, crate::error::ConnectError::Provider(msg) if msg.contains("nonce mismatch")));
     }
 }

@@ -97,3 +97,151 @@ impl Provider for FacebookProvider {
 
     crate::impl_standard_refresh_token!();
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::client::{HttpClient, HttpRequest, HttpResponse};
+    use serde_json::json;
+    use std::sync::Arc;
+
+    struct MockFacebookClient {
+        token_status: u16,
+        token_body: serde_json::Value,
+        user_status: u16,
+        user_body: serde_json::Value,
+    }
+
+    #[async_trait]
+    impl HttpClient for MockFacebookClient {
+        async fn execute(
+            &self,
+            req: HttpRequest,
+        ) -> Result<HttpResponse, crate::error::ConnectError> {
+            if req.url.contains("access_token") {
+                Ok(HttpResponse {
+                    status: self.token_status,
+                    body: self.token_body.clone(),
+                })
+            } else if req.url.contains("graph.facebook.com/v19.0/me") {
+                Ok(HttpResponse {
+                    status: self.user_status,
+                    body: self.user_body.clone(),
+                })
+            } else {
+                Err(crate::error::ConnectError::Provider("Unexpected URL".to_string()))
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_facebook_get_user_success() {
+        let provider = FacebookProvider::new(
+            "client_id".to_string(),
+            secrecy::SecretString::from("client_secret".to_string()),
+            "https://redirect.url".to_string(),
+        ).with_http_client(Arc::new(MockFacebookClient {
+            token_status: 200,
+            token_body: json!({
+                "access_token": "mock_access_token",
+                "expires_in": 3600
+            }),
+            user_status: 200,
+            user_body: json!({
+                "id": "12345",
+                "name": "Test User",
+                "email": "test@example.com",
+                "picture": {
+                    "data": {
+                        "url": "https://avatar.url"
+                    }
+                }
+            }),
+        }));
+
+        let user = provider.get_user(crate::provider::ExchangeParams {
+            auth_code: "code",
+            ..Default::default()
+        }).await.unwrap();
+
+        assert_eq!(user.id, "12345");
+        assert_eq!(user.name, "Test User");
+        assert_eq!(user.email.as_deref(), Some("test@example.com"));
+        assert_eq!(user.avatar_url.as_deref(), Some("https://avatar.url"));
+    }
+
+    #[tokio::test]
+    async fn test_facebook_token_error() {
+        let provider = FacebookProvider::new(
+            "client_id".to_string(),
+            secrecy::SecretString::from("client_secret".to_string()),
+            "https://redirect.url".to_string(),
+        ).with_http_client(Arc::new(MockFacebookClient {
+            token_status: 400,
+            token_body: json!({"error": {"message": "invalid_grant"}}),
+            user_status: 200,
+            user_body: json!({}),
+        }));
+
+        let err = provider.get_user(crate::provider::ExchangeParams {
+            auth_code: "code",
+            ..Default::default()
+        }).await.unwrap_err();
+        
+        assert!(matches!(err, crate::error::ConnectError::ProviderApiError { .. }));
+    }
+
+    #[tokio::test]
+    async fn test_facebook_missing_id() {
+        let provider = FacebookProvider::new(
+            "client_id".to_string(),
+            secrecy::SecretString::from("client_secret".to_string()),
+            "https://redirect.url".to_string(),
+        ).with_http_client(Arc::new(MockFacebookClient {
+            token_status: 200,
+            token_body: json!({"access_token": "mock_access_token"}),
+            user_status: 200,
+            user_body: json!({"name": "No ID User"}),
+        }));
+
+        let err = provider.get_user(crate::provider::ExchangeParams {
+            auth_code: "code",
+            ..Default::default()
+        }).await.unwrap_err();
+
+        assert!(matches!(err, crate::error::ConnectError::Provider(_)));
+    }
+
+    #[tokio::test]
+    async fn test_facebook_refresh_token_success() {
+        let provider = FacebookProvider::new(
+            "client_id".to_string(),
+            secrecy::SecretString::from("client_secret".to_string()),
+            "https://redirect.url".to_string(),
+        ).with_http_client(Arc::new(MockFacebookClient {
+            token_status: 200,
+            token_body: json!({
+                "access_token": "new_access_token",
+                "refresh_token": "new_refresh_token",
+                "expires_in": 3600
+            }),
+            user_status: 200,
+            user_body: json!({
+                "id": "12345",
+                "name": "Test User Refreshed",
+                "email": "test@example.com",
+                "picture": {
+                    "data": {
+                        "url": "https://avatar.url"
+                    }
+                }
+            }),
+        }));
+
+        let user = provider.refresh_token("old_refresh").await.unwrap();
+        assert_eq!(user.id, "12345");
+        assert_eq!(user.name, "Test User Refreshed");
+        use secrecy::ExposeSecret;
+        assert_eq!(user.refresh_token.unwrap().expose_secret(), "new_refresh_token");
+    }
+}

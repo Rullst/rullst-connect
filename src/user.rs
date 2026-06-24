@@ -143,4 +143,32 @@ mod tests {
         );
         assert_eq!(user.expires_in, deserialized.expires_in);
     }
+
+    #[test]
+    fn test_debug_and_clone() {
+        let user = ConnectUser {
+            id: "123".to_string(),
+            name: "Test User".to_string(),
+            email: Some("test@example.com".to_string()),
+            email_verified: Some(true),
+            avatar_url: Some("https://example.com/avatar.png".to_string()),
+            raw_data: json!({"custom_field": "custom_value"}),
+            access_token: secrecy::SecretString::from("access123".to_string()),
+            refresh_token: Some(secrecy::SecretString::from("refresh123".to_string())),
+            expires_in: Some(3600),
+        };
+        let _cloned = user.clone();
+        let _debug = format!("{:?}", user);
+
+        let device = DeviceAuthorizationResponse {
+            device_code: "device".to_string(),
+            user_code: "user".to_string(),
+            verification_uri: "uri".to_string(),
+            verification_uri_complete: Some("uri_complete".to_string()),
+            expires_in: 3600,
+            interval: Some(5),
+        };
+        let _cloned_device = device.clone();
+        let _debug_device = format!("{:?}", device);
+    }
 }

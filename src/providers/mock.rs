@@ -94,4 +94,29 @@ mod tests {
             panic!("Expected ConnectError::Token");
         }
     }
+
+    #[tokio::test]
+    async fn test_mock_provider_basics() {
+        let user = ConnectUser {
+            id: "1".to_string(),
+            name: "Test".to_string(),
+            email: None,
+            avatar_url: None,
+            email_verified: None,
+            raw_data: serde_json::json!({}),
+            access_token: secrecy::SecretString::from("token".to_string()),
+            refresh_token: None,
+            expires_in: None,
+        };
+        let provider = MockProvider::new(user, "http://mock.redirect".to_string());
+
+        assert_eq!(provider.token_url(), "https://mock.provider/token");
+        assert_eq!(provider.redirect_url(), "http://mock.redirect");
+
+        let fetched_user = provider.get_user(crate::provider::ExchangeParams::default()).await.unwrap();
+        assert_eq!(fetched_user.id, "1");
+
+        let fetched_user_token = provider.get_user_from_token("dummy_token").await.unwrap();
+        assert_eq!(fetched_user_token.id, "1");
+    }
 }

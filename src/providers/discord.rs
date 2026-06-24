@@ -93,3 +93,148 @@ impl Provider for DiscordProvider {
         .await
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::client::{HttpClient, HttpRequest, HttpResponse};
+    use serde_json::json;
+    use std::sync::Arc;
+
+    struct MockDiscordClient {
+        token_status: u16,
+        token_body: serde_json::Value,
+        user_status: u16,
+        user_body: serde_json::Value,
+    }
+
+    #[async_trait]
+    impl HttpClient for MockDiscordClient {
+        async fn execute(
+            &self,
+            req: HttpRequest,
+        ) -> Result<HttpResponse, crate::error::ConnectError> {
+            if req.url.contains("token") {
+                Ok(HttpResponse {
+                    status: self.token_status,
+                    body: self.token_body.clone(),
+                })
+            } else if req.url.contains("@me") {
+                Ok(HttpResponse {
+                    status: self.user_status,
+                    body: self.user_body.clone(),
+                })
+            } else {
+                Err(crate::error::ConnectError::Provider("Unexpected URL".to_string()))
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_discord_get_user_success() {
+        let provider = DiscordProvider::new(
+            "client_id".to_string(),
+            secrecy::SecretString::from("client_secret".to_string()),
+            "https://redirect.url".to_string(),
+        ).with_http_client(Arc::new(MockDiscordClient {
+            token_status: 200,
+            token_body: json!({
+                "access_token": "mock_access_token",
+                "expires_in": 3600
+            }),
+            user_status: 200,
+            user_body: json!({
+                "id": "12345",
+                "username": "testuser",
+                "email": "test@example.com",
+                "avatar": "deadbeef",
+                "verified": true
+            }),
+        }));
+
+        let user = provider.get_user(crate::provider::ExchangeParams {
+            auth_code: "code",
+            ..Default::default()
+        }).await.unwrap();
+
+        assert_eq!(user.id, "12345");
+        assert_eq!(user.name, "testuser");
+        assert_eq!(user.email.as_deref(), Some("test@example.com"));
+        assert_eq!(user.avatar_url.as_deref(), Some("https://cdn.discordapp.com/avatars/12345/deadbeef.png?size=1024"));
+    }
+
+    #[tokio::test]
+    async fn test_discord_token_error() {
+        let provider = DiscordProvider::new(
+            "client_id".to_string(),
+            secrecy::SecretString::from("client_secret".to_string()),
+            "https://redirect.url".to_string(),
+        ).with_http_client(Arc::new(MockDiscordClient {
+            token_status: 400,
+            token_body: json!({"error": "invalid_grant"}),
+            user_status: 200,
+            user_body: json!({}),
+        }));
+
+        let err = provider.get_user(crate::provider::ExchangeParams {
+            auth_code: "code",
+            ..Default::default()
+        }).await.unwrap_err();
+        
+        assert!(matches!(err, crate::error::ConnectError::ProviderApiError { .. }));
+    }
+
+    #[tokio::test]
+    async fn test_discord_missing_id() {
+        let provider = DiscordProvider::new(
+            "client_id".to_string(),
+            secrecy::SecretString::from("client_secret".to_string()),
+            "https://redirect.url".to_string(),
+        ).with_http_client(Arc::new(MockDiscordClient {
+            token_status: 200,
+            token_body: json!({"access_token": "mock_access_token"}),
+            user_status: 200,
+            user_body: json!({"username": "No ID User"}),
+        }));
+
+        let user = provider.get_user(crate::provider::ExchangeParams {
+            auth_code: "code",
+            ..Default::default()
+        }).await.unwrap();
+        
+        // Discord gracefully degrades if `id` is missing in some implementations,
+        // Wait, looking at the code: `let id = user_res["id"].as_str().map(String::from).unwrap_or_default();`
+        // So it shouldn't be an error, it will just return empty id.
+        assert_eq!(user.id, "");
+    }
+
+    #[tokio::test]
+    async fn test_discord_refresh_token_success() {
+        let provider = DiscordProvider::new(
+            "client_id".to_string(),
+            secrecy::SecretString::from("client_secret".to_string()),
+            "https://redirect.url".to_string(),
+        ).with_http_client(Arc::new(MockDiscordClient {
+            token_status: 200,
+            token_body: json!({
+                "access_token": "new_access_token",
+                "refresh_token": "new_refresh_token",
+                "expires_in": 3600
+            }),
+            user_status: 200,
+            user_body: json!({
+                "id": "12345",
+                "username": "testuser_refreshed",
+                "email": "test@example.com",
+                "avatar": "deadbeef",
+                "verified": true
+            }),
+        }));
+
+        let user = provider.refresh_token("old_refresh").await.unwrap();
+        assert_eq!(user.id, "12345");
+        assert_eq!(user.name, "testuser_refreshed");
+        use secrecy::ExposeSecret;
+        assert_eq!(user.refresh_token.unwrap().expose_secret(), "new_refresh_token");
+    }
+}
