@@ -4,7 +4,7 @@ version = "10.0.1"
 edition = "2024"
 description = "OAuth2 Social Login for Rust web frameworks."
 license = "MIT"
-repository = "https://github.com/venelouis/rullst-connect"
+repository = "https://github.com/Rullst/rullst-connect"
 categories = ["web-programming", "authentication"]
 keywords = ["oauth2", "connect", "authentication", "login"]
 
