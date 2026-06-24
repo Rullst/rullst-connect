@@ -15,3 +15,21 @@ libfuzzer-sys = "0.4"
 
 [dependencies.rullst-connect]
 path = ".."
+
+[[bin]]
+name = "default_target"
+path = "fuzz_targets/default_target.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_user_json"
+path = "fuzz_targets/fuzz_user_json.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_token_response"
+path = "fuzz_targets/fuzz_token_response.rs"
+test = false
+doc = false
