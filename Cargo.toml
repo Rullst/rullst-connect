@@ -55,7 +55,6 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 tower = { version = "0.5", features = ["util"] }
 criterion = "0.5"
 loom = "0.7"
-kani = "0.56"
 
 [[bench]]
 name = "provider_bench"
