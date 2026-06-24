@@ -5,6 +5,7 @@
 [![Documentation](https://docs.rs/rullst-connect/badge.svg)](https://docs.rs/rullst-connect)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Rust Version](https://img.shields.io/badge/rustc-1.75+-lightgray.svg)](https://blog.rust-lang.org/2023/12/28/Rust-1.75.0.html)
+
 **Rullst Connect** is an elegant, async-first, and Developer Experience (DX) focused OAuth2 authentication library for Rust. It simplifies the integration of social logins into your Rust web applications, providing a standardized interface across multiple providers.
 
 ## 🛡️ Quality & Security Audits
@@ -186,6 +187,15 @@ For the exact release checklist and what to do next time, see [RELEASING.md](REL
 ## 🤝 Contributing
 
 Feel free to open Issues and submit Pull Requests! Want to add a new provider? It's easy! Just implement the `Provider` trait.
+
+<!--
+## Contributors ✨
+Thanks!
+
+<a href="https://github.com/Rullst/rullst-connect/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=Rullst/rullst-connect" />
+</a>
+-->
 
 ## 📄 License
 
