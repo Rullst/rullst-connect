@@ -21,13 +21,15 @@ jobs:
     timeout-minutes: 360
     
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       
       - name: Setup Rust Nightly
         uses: dtolnay/rust-toolchain@nightly
         
       - name: Install cargo-fuzz
-        uses: taiki-e/install-action@cargo-fuzz
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-fuzz
         
       # NOTA: Este passo irá falhar/não fará nada se não houver targets definidos em `fuzz/fuzz_targets/`.
       # Assim que você rodar `cargo fuzz init` localmente e commitar, este job funcionará automaticamente.
