@@ -102,7 +102,9 @@ mod tests {
                     body: self.user_body.clone(),
                 })
             } else {
-                Err(crate::error::ConnectError::Provider("Unexpected URL".to_string()))
+                Err(crate::error::ConnectError::Provider(
+                    "Unexpected URL".to_string(),
+                ))
             }
         }
     }
@@ -113,7 +115,8 @@ mod tests {
             "client_id".to_string(),
             secrecy::SecretString::from("client_secret".to_string()),
             "https://redirect.url".to_string(),
-        ).with_http_client(Arc::new(MockXClient {
+        )
+        .with_http_client(Arc::new(MockXClient {
             token_status: 200,
             token_body: json!({
                 "access_token": "mock_access_token",
@@ -129,10 +132,13 @@ mod tests {
             }),
         }));
 
-        let user = provider.get_user(crate::provider::ExchangeParams {
-            auth_code: "code",
-            ..Default::default()
-        }).await.unwrap();
+        let user = provider
+            .get_user(crate::provider::ExchangeParams {
+                auth_code: "code",
+                ..Default::default()
+            })
+            .await
+            .unwrap();
 
         assert_eq!(user.id, "12345");
         assert_eq!(user.name, "Test User");
@@ -145,19 +151,26 @@ mod tests {
             "client_id".to_string(),
             secrecy::SecretString::from("client_secret".to_string()),
             "https://redirect.url".to_string(),
-        ).with_http_client(Arc::new(MockXClient {
+        )
+        .with_http_client(Arc::new(MockXClient {
             token_status: 400,
             token_body: json!({"error": "invalid_grant"}),
             user_status: 200,
             user_body: json!({}),
         }));
 
-        let err = provider.get_user(crate::provider::ExchangeParams {
-            auth_code: "code",
-            ..Default::default()
-        }).await.unwrap_err();
-        
-        assert!(matches!(err, crate::error::ConnectError::ProviderApiError { .. }));
+        let err = provider
+            .get_user(crate::provider::ExchangeParams {
+                auth_code: "code",
+                ..Default::default()
+            })
+            .await
+            .unwrap_err();
+
+        assert!(matches!(
+            err,
+            crate::error::ConnectError::ProviderApiError { .. }
+        ));
     }
 
     #[tokio::test]
@@ -166,7 +179,8 @@ mod tests {
             "client_id".to_string(),
             secrecy::SecretString::from("client_secret".to_string()),
             "https://redirect.url".to_string(),
-        ).with_http_client(Arc::new(MockXClient {
+        )
+        .with_http_client(Arc::new(MockXClient {
             token_status: 200,
             token_body: json!({"access_token": "mock_access_token"}),
             user_status: 200,
@@ -177,10 +191,13 @@ mod tests {
             }),
         }));
 
-        let err = provider.get_user(crate::provider::ExchangeParams {
-            auth_code: "code",
-            ..Default::default()
-        }).await.unwrap_err();
+        let err = provider
+            .get_user(crate::provider::ExchangeParams {
+                auth_code: "code",
+                ..Default::default()
+            })
+            .await
+            .unwrap_err();
 
         assert!(matches!(err, crate::error::ConnectError::Provider(_)));
     }
@@ -191,7 +208,8 @@ mod tests {
             "client_id".to_string(),
             secrecy::SecretString::from("client_secret".to_string()),
             "https://redirect.url".to_string(),
-        ).with_http_client(Arc::new(MockXClient {
+        )
+        .with_http_client(Arc::new(MockXClient {
             token_status: 200,
             token_body: json!({
                 "access_token": "new_access_token",
@@ -212,6 +230,9 @@ mod tests {
         assert_eq!(user.id, "12345");
         assert_eq!(user.name, "Test User Refreshed");
         use secrecy::ExposeSecret;
-        assert_eq!(user.refresh_token.unwrap().expose_secret(), "new_refresh_token");
+        assert_eq!(
+            user.refresh_token.unwrap().expose_secret(),
+            "new_refresh_token"
+        );
     }
 }

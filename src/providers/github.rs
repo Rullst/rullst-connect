@@ -301,12 +301,18 @@ mod tests {
             device_body: json!({}),
         }));
 
-        let err = provider.get_user(crate::provider::ExchangeParams {
-            auth_code: "code",
-            ..Default::default()
-        }).await.unwrap_err();
-        
-        assert!(matches!(err, crate::error::ConnectError::ProviderApiError { .. }));
+        let err = provider
+            .get_user(crate::provider::ExchangeParams {
+                auth_code: "code",
+                ..Default::default()
+            })
+            .await
+            .unwrap_err();
+
+        assert!(matches!(
+            err,
+            crate::error::ConnectError::ProviderApiError { .. }
+        ));
     }
 
     #[tokio::test]
@@ -387,7 +393,9 @@ mod tests {
         }));
 
         let err = provider.poll_device_token("device_123").await.unwrap_err();
-        assert!(matches!(err, crate::error::ConnectError::Token(msg) if msg.contains("authorization_pending")));
+        assert!(
+            matches!(err, crate::error::ConnectError::Token(msg) if msg.contains("authorization_pending"))
+        );
     }
 
     #[tokio::test]
@@ -407,6 +415,8 @@ mod tests {
         }));
 
         let err = provider.poll_device_token("device_123").await.unwrap_err();
-        assert!(matches!(err, crate::error::ConnectError::Token(msg) if msg.contains("Failed to get access_token during device poll")));
+        assert!(
+            matches!(err, crate::error::ConnectError::Token(msg) if msg.contains("Failed to get access_token during device poll"))
+        );
     }
 }

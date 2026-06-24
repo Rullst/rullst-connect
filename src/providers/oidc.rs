@@ -343,10 +343,7 @@ impl Provider for OidcProvider {
         self.token_endpoint.clone()
     }
 
-    async fn refresh_token(
-        &self,
-        refresh_token: &str,
-    ) -> Result<ConnectUser, ConnectError> {
+    async fn refresh_token(&self, refresh_token: &str) -> Result<ConnectUser, ConnectError> {
         let form_data = crate::provider::TokenExchangeForm {
             client_id: self.client_id.as_str(),
             client_secret: Some(secrecy::ExposeSecret::expose_secret(&self.client_secret)),
@@ -362,9 +359,9 @@ impl Provider for OidcProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::client::{HttpRequest, HttpResponse};
     use serde_json::json;
     use std::sync::Arc;
-    use crate::client::{HttpRequest, HttpResponse};
 
     struct MockOidcClient {
         config_body: Value,
@@ -546,21 +543,53 @@ mod tests {
             captured_urls: tokio::sync::Mutex::new(vec![]),
         });
 
-        assert!(OidcProvider::discover_with_client(
-            "invalid_url", "id".to_string(), "secret".to_string(), "http://redirect".to_string(), mock_client.clone()
-        ).await.is_err());
+        assert!(
+            OidcProvider::discover_with_client(
+                "invalid_url",
+                "id".to_string(),
+                "secret".to_string(),
+                "http://redirect".to_string(),
+                mock_client.clone()
+            )
+            .await
+            .is_err()
+        );
 
-        assert!(OidcProvider::discover_with_client(
-            "http://issuer", "id".to_string(), "secret".to_string(), "invalid_redirect".to_string(), mock_client.clone()
-        ).await.is_err());
+        assert!(
+            OidcProvider::discover_with_client(
+                "http://issuer",
+                "id".to_string(),
+                "secret".to_string(),
+                "invalid_redirect".to_string(),
+                mock_client.clone()
+            )
+            .await
+            .is_err()
+        );
 
-        assert!(OidcProvider::discover_with_client(
-            "http://issuer", "".to_string(), "secret".to_string(), "http://redirect".to_string(), mock_client.clone()
-        ).await.is_err());
+        assert!(
+            OidcProvider::discover_with_client(
+                "http://issuer",
+                "".to_string(),
+                "secret".to_string(),
+                "http://redirect".to_string(),
+                mock_client.clone()
+            )
+            .await
+            .is_err()
+        );
 
-        assert!(OidcProvider::discover_with_client(
-            "http://issuer", "id".to_string(), "".to_string(), "http://redirect".to_string(), mock_client.clone()
-        ).await.is_err());
+        assert!(
+            OidcProvider::discover_with_client(
+                "http://issuer",
+                "id".to_string(),
+                "".to_string(),
+                "http://redirect".to_string(),
+                mock_client.clone()
+            )
+            .await
+            .is_err()
+        );
     }
 
     #[tokio::test]
@@ -583,12 +612,17 @@ mod tests {
             "client_secret".to_string(),
             "https://redirect.url".to_string(),
             mock_client.clone(),
-        ).await.unwrap();
+        )
+        .await
+        .unwrap();
 
-        let user = provider.get_user(crate::provider::ExchangeParams {
-            auth_code: "code",
-            ..Default::default()
-        }).await.unwrap();
+        let user = provider
+            .get_user(crate::provider::ExchangeParams {
+                auth_code: "code",
+                ..Default::default()
+            })
+            .await
+            .unwrap();
 
         assert_eq!(user.id, "user_123");
         assert_eq!(user.name, "Test User");
@@ -615,14 +649,22 @@ mod tests {
             "client_secret".to_string(),
             "https://redirect.url".to_string(),
             mock_client.clone(),
-        ).await.unwrap();
+        )
+        .await
+        .unwrap();
 
-        let err = provider.get_user(crate::provider::ExchangeParams {
-            auth_code: "code",
-            ..Default::default()
-        }).await.unwrap_err();
+        let err = provider
+            .get_user(crate::provider::ExchangeParams {
+                auth_code: "code",
+                ..Default::default()
+            })
+            .await
+            .unwrap_err();
 
-        assert!(matches!(err, crate::error::ConnectError::ProviderApiError { .. }));
+        assert!(matches!(
+            err,
+            crate::error::ConnectError::ProviderApiError { .. }
+        ));
     }
 
     #[tokio::test]
@@ -645,14 +687,19 @@ mod tests {
             "client_secret".to_string(),
             "https://redirect.url".to_string(),
             mock_client.clone(),
-        ).await.unwrap();
+        )
+        .await
+        .unwrap();
 
         let user = provider.refresh_token("old_refresh").await.unwrap();
 
         assert_eq!(user.id, "user_123");
         assert_eq!(user.name, "Test User");
         use secrecy::ExposeSecret;
-        assert_eq!(user.refresh_token.unwrap().expose_secret(), "new_refresh_token");
+        assert_eq!(
+            user.refresh_token.unwrap().expose_secret(),
+            "new_refresh_token"
+        );
     }
 
     #[tokio::test]
@@ -675,12 +722,17 @@ mod tests {
             "client_secret".to_string(),
             "https://redirect.url".to_string(),
             mock_client.clone(),
-        ).await.unwrap();
+        )
+        .await
+        .unwrap();
 
-        let err = provider.get_user(crate::provider::ExchangeParams {
-            auth_code: "code",
-            ..Default::default()
-        }).await.unwrap_err();
+        let err = provider
+            .get_user(crate::provider::ExchangeParams {
+                auth_code: "code",
+                ..Default::default()
+            })
+            .await
+            .unwrap_err();
 
         assert!(matches!(err, crate::error::ConnectError::Provider(_)));
     }
@@ -723,7 +775,10 @@ mod tests {
                         }),
                     })
                 } else {
-                    Ok(HttpResponse { status: 200, body: json!({}) })
+                    Ok(HttpResponse {
+                        status: 200,
+                        body: json!({}),
+                    })
                 }
             }
         }
@@ -734,14 +789,21 @@ mod tests {
             "client_secret".to_string(),
             "https://redirect.url".to_string(),
             Arc::new(InvalidJwtClient),
-        ).await.unwrap();
+        )
+        .await
+        .unwrap();
 
-        let err = provider.get_user(crate::provider::ExchangeParams {
-            auth_code: "code",
-            ..Default::default()
-        }).await.unwrap_err();
+        let err = provider
+            .get_user(crate::provider::ExchangeParams {
+                auth_code: "code",
+                ..Default::default()
+            })
+            .await
+            .unwrap_err();
 
-        assert!(matches!(err, crate::error::ConnectError::Provider(msg) if msg.contains("Failed to decode OIDC id_token header")));
+        assert!(
+            matches!(err, crate::error::ConnectError::Provider(msg) if msg.contains("Failed to decode OIDC id_token header"))
+        );
     }
 
     #[tokio::test]
@@ -772,7 +834,10 @@ mod tests {
                         }),
                     })
                 } else {
-                    Ok(HttpResponse { status: 200, body: json!({}) })
+                    Ok(HttpResponse {
+                        status: 200,
+                        body: json!({}),
+                    })
                 }
             }
         }
@@ -783,19 +848,28 @@ mod tests {
             "client_secret".to_string(),
             "https://redirect.url".to_string(),
             Arc::new(MissingKidClient(id_token)),
-        ).await.unwrap();
+        )
+        .await
+        .unwrap();
 
-        let err = provider.get_user(crate::provider::ExchangeParams {
-            auth_code: "code",
-            ..Default::default()
-        }).await.unwrap_err();
+        let err = provider
+            .get_user(crate::provider::ExchangeParams {
+                auth_code: "code",
+                ..Default::default()
+            })
+            .await
+            .unwrap_err();
 
-        assert!(matches!(err, crate::error::ConnectError::Provider(msg) if msg.contains("Missing 'kid' header")));
+        assert!(
+            matches!(err, crate::error::ConnectError::Provider(msg) if msg.contains("Missing 'kid' header"))
+        );
     }
 
     #[tokio::test]
     async fn test_oidc_id_token_kid_not_found() {
-        let id_token = "eyJhbGciOiJIUzI1NiIsImtpZCI6Im5vbl9leGlzdGVudF9raWQifQ.eyJzdWIiOiIxMjMifQ.ZHVtbXk".to_string();
+        let id_token =
+            "eyJhbGciOiJIUzI1NiIsImtpZCI6Im5vbl9leGlzdGVudF9raWQifQ.eyJzdWIiOiIxMjMifQ.ZHVtbXk"
+                .to_string();
 
         struct KidNotFoundClient(String);
         #[async_trait]
@@ -835,7 +909,10 @@ mod tests {
                         }),
                     })
                 } else {
-                    Ok(HttpResponse { status: 200, body: json!({}) })
+                    Ok(HttpResponse {
+                        status: 200,
+                        body: json!({}),
+                    })
                 }
             }
         }
@@ -846,14 +923,21 @@ mod tests {
             "client_secret".to_string(),
             "https://redirect.url".to_string(),
             Arc::new(KidNotFoundClient(id_token)),
-        ).await.unwrap();
+        )
+        .await
+        .unwrap();
 
-        let err = provider.get_user(crate::provider::ExchangeParams {
-            auth_code: "code",
-            ..Default::default()
-        }).await.unwrap_err();
+        let err = provider
+            .get_user(crate::provider::ExchangeParams {
+                auth_code: "code",
+                ..Default::default()
+            })
+            .await
+            .unwrap_err();
 
-        assert!(matches!(err, crate::error::ConnectError::Provider(msg) if msg.contains("not found")));
+        assert!(
+            matches!(err, crate::error::ConnectError::Provider(msg) if msg.contains("not found"))
+        );
     }
 
     #[tokio::test]
@@ -893,8 +977,12 @@ mod tests {
         let priv_key = jsonwebtoken::EncodingKey::from_rsa_pem(pem).unwrap();
         let mut header = jsonwebtoken::Header::new(jsonwebtoken::Algorithm::RS256);
         header.kid = Some("valid_kid".to_string());
-        
-        let exp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() + 3600;
+
+        let exp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            + 3600;
 
         let claims = json!({
             "iss": "https://issuer.com",
@@ -917,7 +1005,10 @@ mod tests {
         }
         #[async_trait]
         impl HttpClient for ValidOidcClient {
-            async fn execute(&self, req: HttpRequest) -> Result<HttpResponse, crate::error::ConnectError> {
+            async fn execute(
+                &self,
+                req: HttpRequest,
+            ) -> Result<HttpResponse, crate::error::ConnectError> {
                 if req.url.contains("token") {
                     Ok(HttpResponse {
                         status: 200,
@@ -953,7 +1044,10 @@ mod tests {
                         }),
                     })
                 } else {
-                    Ok(HttpResponse { status: 200, body: json!({}) })
+                    Ok(HttpResponse {
+                        status: 200,
+                        body: json!({}),
+                    })
                 }
             }
         }
@@ -968,24 +1062,34 @@ mod tests {
                 n: n_val.to_string(),
                 e: e_val.to_string(),
             }),
-        ).await.unwrap();
+        )
+        .await
+        .unwrap();
 
-        let user = provider.get_user(crate::provider::ExchangeParams {
-            auth_code: "code",
-            expected_nonce: Some("test_nonce"),
-            ..Default::default()
-        }).await.unwrap();
+        let user = provider
+            .get_user(crate::provider::ExchangeParams {
+                auth_code: "code",
+                expected_nonce: Some("test_nonce"),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
 
         assert_eq!(user.id, "oidc_user_123");
         assert_eq!(user.name, "OIDC User");
         assert_eq!(user.email.as_deref(), Some("oidc@example.com"));
 
         // Test Nonce Mismatch
-        let err = provider.get_user(crate::provider::ExchangeParams {
-            auth_code: "code",
-            expected_nonce: Some("wrong_nonce"),
-            ..Default::default()
-        }).await.unwrap_err();
-        assert!(matches!(err, crate::error::ConnectError::Provider(msg) if msg.contains("nonce mismatch")));
+        let err = provider
+            .get_user(crate::provider::ExchangeParams {
+                auth_code: "code",
+                expected_nonce: Some("wrong_nonce"),
+                ..Default::default()
+            })
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, crate::error::ConnectError::Provider(msg) if msg.contains("nonce mismatch"))
+        );
     }
 }

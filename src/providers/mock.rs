@@ -113,7 +113,10 @@ mod tests {
         assert_eq!(provider.token_url(), "https://mock.provider/token");
         assert_eq!(provider.redirect_url(), "http://mock.redirect");
 
-        let fetched_user = provider.get_user(crate::provider::ExchangeParams::default()).await.unwrap();
+        let fetched_user = provider
+            .get_user(crate::provider::ExchangeParams::default())
+            .await
+            .unwrap();
         assert_eq!(fetched_user.id, "1");
 
         let fetched_user_token = provider.get_user_from_token("dummy_token").await.unwrap();

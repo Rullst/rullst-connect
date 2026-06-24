@@ -332,7 +332,9 @@ mod tests {
                     body: self.user_body.clone(),
                 })
             } else {
-                Err(crate::error::ConnectError::Provider("Unexpected URL".to_string()))
+                Err(crate::error::ConnectError::Provider(
+                    "Unexpected URL".to_string(),
+                ))
             }
         }
     }
@@ -343,7 +345,8 @@ mod tests {
             "client_id".to_string(),
             secrecy::SecretString::from("client_secret".to_string()),
             "https://redirect.url".to_string(),
-        ).with_http_client(Arc::new(MockGoogleClient {
+        )
+        .with_http_client(Arc::new(MockGoogleClient {
             token_status: 200,
             token_body: json!({
                 "access_token": "mock_access_token",
@@ -359,10 +362,13 @@ mod tests {
             }),
         }));
 
-        let user = provider.get_user(crate::provider::ExchangeParams {
-            auth_code: "code",
-            ..Default::default()
-        }).await.unwrap();
+        let user = provider
+            .get_user(crate::provider::ExchangeParams {
+                auth_code: "code",
+                ..Default::default()
+            })
+            .await
+            .unwrap();
 
         assert_eq!(user.id, "user_123");
         assert_eq!(user.name, "Test User");
@@ -375,19 +381,26 @@ mod tests {
             "client_id".to_string(),
             secrecy::SecretString::from("client_secret".to_string()),
             "https://redirect.url".to_string(),
-        ).with_http_client(Arc::new(MockGoogleClient {
+        )
+        .with_http_client(Arc::new(MockGoogleClient {
             token_status: 400,
             token_body: json!({"error": "invalid_grant"}),
             user_status: 200,
             user_body: json!({}),
         }));
 
-        let err = provider.get_user(crate::provider::ExchangeParams {
-            auth_code: "code",
-            ..Default::default()
-        }).await.unwrap_err();
-        
-        assert!(matches!(err, crate::error::ConnectError::ProviderApiError { .. }));
+        let err = provider
+            .get_user(crate::provider::ExchangeParams {
+                auth_code: "code",
+                ..Default::default()
+            })
+            .await
+            .unwrap_err();
+
+        assert!(matches!(
+            err,
+            crate::error::ConnectError::ProviderApiError { .. }
+        ));
     }
 
     #[tokio::test]
@@ -396,17 +409,21 @@ mod tests {
             "client_id".to_string(),
             secrecy::SecretString::from("client_secret".to_string()),
             "https://redirect.url".to_string(),
-        ).with_http_client(Arc::new(MockGoogleClient {
+        )
+        .with_http_client(Arc::new(MockGoogleClient {
             token_status: 200,
             token_body: json!({"access_token": "mock_access_token"}),
             user_status: 200,
             user_body: json!({"name": "No ID User"}),
         }));
 
-        let err = provider.get_user(crate::provider::ExchangeParams {
-            auth_code: "code",
-            ..Default::default()
-        }).await.unwrap_err();
+        let err = provider
+            .get_user(crate::provider::ExchangeParams {
+                auth_code: "code",
+                ..Default::default()
+            })
+            .await
+            .unwrap_err();
 
         assert!(matches!(err, crate::error::ConnectError::Provider(_)));
     }
@@ -416,7 +433,8 @@ mod tests {
             "client_id".to_string(),
             secrecy::SecretString::from("client_secret".to_string()),
             "https://redirect.url".to_string(),
-        ).with_http_client(Arc::new(MockGoogleClient {
+        )
+        .with_http_client(Arc::new(MockGoogleClient {
             token_status: 200,
             token_body: json!({
                 "access_token": "mock_access_token",
@@ -426,12 +444,17 @@ mod tests {
             user_body: json!({}),
         }));
 
-        let err = provider.get_user(crate::provider::ExchangeParams {
-            auth_code: "code",
-            ..Default::default()
-        }).await.unwrap_err();
+        let err = provider
+            .get_user(crate::provider::ExchangeParams {
+                auth_code: "code",
+                ..Default::default()
+            })
+            .await
+            .unwrap_err();
 
-        assert!(matches!(err, crate::error::ConnectError::Provider(msg) if msg.contains("Failed to decode Google id_token header")));
+        assert!(
+            matches!(err, crate::error::ConnectError::Provider(msg) if msg.contains("Failed to decode Google id_token header"))
+        );
     }
 
     #[tokio::test]
@@ -443,7 +466,8 @@ mod tests {
             "client_id".to_string(),
             secrecy::SecretString::from("client_secret".to_string()),
             "https://redirect.url".to_string(),
-        ).with_http_client(Arc::new(MockGoogleClient {
+        )
+        .with_http_client(Arc::new(MockGoogleClient {
             token_status: 200,
             token_body: json!({
                 "access_token": "mock_access_token",
@@ -453,18 +477,25 @@ mod tests {
             user_body: json!({}),
         }));
 
-        let err = provider.get_user(crate::provider::ExchangeParams {
-            auth_code: "code",
-            ..Default::default()
-        }).await.unwrap_err();
+        let err = provider
+            .get_user(crate::provider::ExchangeParams {
+                auth_code: "code",
+                ..Default::default()
+            })
+            .await
+            .unwrap_err();
 
-        assert!(matches!(err, crate::error::ConnectError::Provider(msg) if msg.contains("Missing 'kid' header")));
+        assert!(
+            matches!(err, crate::error::ConnectError::Provider(msg) if msg.contains("Missing 'kid' header"))
+        );
     }
 
     #[tokio::test]
     async fn test_google_id_token_kid_not_found() {
         // Create a JWT with kid
-        let id_token = "eyJhbGciOiJIUzI1NiIsImtpZCI6Im5vbl9leGlzdGVudF9raWQifQ.eyJzdWIiOiIxMjMifQ.ZHVtbXk".to_string();
+        let id_token =
+            "eyJhbGciOiJIUzI1NiIsImtpZCI6Im5vbl9leGlzdGVudF9raWQifQ.eyJzdWIiOiIxMjMifQ.ZHVtbXk"
+                .to_string();
 
         struct KidNotFoundClient(String);
         #[async_trait]
@@ -496,7 +527,10 @@ mod tests {
                         }),
                     })
                 } else {
-                    Ok(HttpResponse { status: 200, body: json!({}) })
+                    Ok(HttpResponse {
+                        status: 200,
+                        body: json!({}),
+                    })
                 }
             }
         }
@@ -505,14 +539,20 @@ mod tests {
             "client_id".to_string(),
             secrecy::SecretString::from("client_secret".to_string()),
             "https://redirect.url".to_string(),
-        ).with_http_client(Arc::new(KidNotFoundClient(id_token)));
+        )
+        .with_http_client(Arc::new(KidNotFoundClient(id_token)));
 
-        let err = provider.get_user(crate::provider::ExchangeParams {
-            auth_code: "code",
-            ..Default::default()
-        }).await.unwrap_err();
+        let err = provider
+            .get_user(crate::provider::ExchangeParams {
+                auth_code: "code",
+                ..Default::default()
+            })
+            .await
+            .unwrap_err();
 
-        assert!(matches!(err, crate::error::ConnectError::Provider(msg) if msg.contains("not found")));
+        assert!(
+            matches!(err, crate::error::ConnectError::Provider(msg) if msg.contains("not found"))
+        );
     }
 
     #[tokio::test]
@@ -552,9 +592,13 @@ mod tests {
         let priv_key = jsonwebtoken::EncodingKey::from_rsa_pem(pem).unwrap();
         let mut header = jsonwebtoken::Header::new(jsonwebtoken::Algorithm::RS256);
         header.kid = Some("valid_kid".to_string());
-        
+
         // Expiration in the future
-        let exp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() + 3600;
+        let exp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            + 3600;
 
         let claims = json!({
             "iss": "https://accounts.google.com",
@@ -577,7 +621,10 @@ mod tests {
         }
         #[async_trait]
         impl HttpClient for ValidClient {
-            async fn execute(&self, req: HttpRequest) -> Result<HttpResponse, crate::error::ConnectError> {
+            async fn execute(
+                &self,
+                req: HttpRequest,
+            ) -> Result<HttpResponse, crate::error::ConnectError> {
                 if req.url.contains("token") {
                     Ok(HttpResponse {
                         status: 200,
@@ -602,7 +649,10 @@ mod tests {
                         }),
                     })
                 } else {
-                    Ok(HttpResponse { status: 200, body: json!({}) })
+                    Ok(HttpResponse {
+                        status: 200,
+                        body: json!({}),
+                    })
                 }
             }
         }
@@ -611,28 +661,37 @@ mod tests {
             "client_id".to_string(),
             secrecy::SecretString::from("client_secret".to_string()),
             "https://redirect.url".to_string(),
-        ).with_http_client(Arc::new(ValidClient {
+        )
+        .with_http_client(Arc::new(ValidClient {
             id_token,
             n: n_val.to_string(),
             e: e_val.to_string(),
         }));
 
-        let user = provider.get_user(crate::provider::ExchangeParams {
-            auth_code: "code",
-            expected_nonce: Some("test_nonce"),
-            ..Default::default()
-        }).await.unwrap();
+        let user = provider
+            .get_user(crate::provider::ExchangeParams {
+                auth_code: "code",
+                expected_nonce: Some("test_nonce"),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
 
         assert_eq!(user.id, "user_id_123");
         assert_eq!(user.name, "Test User");
         assert_eq!(user.email.as_deref(), Some("test@example.com"));
 
-        let err = provider.get_user(crate::provider::ExchangeParams {
-            auth_code: "code",
-            expected_nonce: Some("wrong_nonce"),
-            ..Default::default()
-        }).await.unwrap_err();
-        assert!(matches!(err, crate::error::ConnectError::Provider(msg) if msg.contains("nonce mismatch")));
+        let err = provider
+            .get_user(crate::provider::ExchangeParams {
+                auth_code: "code",
+                expected_nonce: Some("wrong_nonce"),
+                ..Default::default()
+            })
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, crate::error::ConnectError::Provider(msg) if msg.contains("nonce mismatch"))
+        );
     }
 
     #[tokio::test]
@@ -641,7 +700,8 @@ mod tests {
             "client_id".to_string(),
             secrecy::SecretString::from("client_secret".to_string()),
             "https://redirect.url".to_string(),
-        ).with_http_client(Arc::new(MockGoogleClient {
+        )
+        .with_http_client(Arc::new(MockGoogleClient {
             token_status: 200,
             token_body: json!({
                 "access_token": "new_access_token",
@@ -662,7 +722,10 @@ mod tests {
         assert_eq!(user.id, "user_123");
         assert_eq!(user.name, "Test User Refreshed");
         use secrecy::ExposeSecret;
-        assert_eq!(user.refresh_token.unwrap().expose_secret(), "new_refresh_token");
+        assert_eq!(
+            user.refresh_token.unwrap().expose_secret(),
+            "new_refresh_token"
+        );
     }
 
     #[tokio::test]
@@ -680,7 +743,9 @@ mod tests {
                         body: json!({}),
                     })
                 } else {
-                    Err(crate::error::ConnectError::Provider("Unexpected URL".to_string()))
+                    Err(crate::error::ConnectError::Provider(
+                        "Unexpected URL".to_string(),
+                    ))
                 }
             }
         }
@@ -689,7 +754,8 @@ mod tests {
             "client_id".to_string(),
             secrecy::SecretString::from("client_secret".to_string()),
             "https://redirect.url".to_string(),
-        ).with_http_client(Arc::new(MockRevokeClient));
+        )
+        .with_http_client(Arc::new(MockRevokeClient));
 
         provider.revoke_token("some_token").await.unwrap();
     }

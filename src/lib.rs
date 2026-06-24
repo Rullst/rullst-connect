@@ -123,32 +123,77 @@ mod tests {
         assert!(unknown.is_err());
 
         // Test all supported factory providers
-        let google = Connect::driver("google", "id".to_string(), secrecy::SecretString::from("secret".to_string()), "http://url".to_string());
+        let google = Connect::driver(
+            "google",
+            "id".to_string(),
+            secrecy::SecretString::from("secret".to_string()),
+            "http://url".to_string(),
+        );
         assert!(google.is_ok());
 
-        let facebook = Connect::driver("facebook", "id".to_string(), secrecy::SecretString::from("secret".to_string()), "http://url".to_string());
+        let facebook = Connect::driver(
+            "facebook",
+            "id".to_string(),
+            secrecy::SecretString::from("secret".to_string()),
+            "http://url".to_string(),
+        );
         assert!(facebook.is_ok());
 
-        let discord = Connect::driver("discord", "id".to_string(), secrecy::SecretString::from("secret".to_string()), "http://url".to_string());
+        let discord = Connect::driver(
+            "discord",
+            "id".to_string(),
+            secrecy::SecretString::from("secret".to_string()),
+            "http://url".to_string(),
+        );
         assert!(discord.is_ok());
 
-        let linkedin = Connect::driver("linkedin", "id".to_string(), secrecy::SecretString::from("secret".to_string()), "http://url".to_string());
+        let linkedin = Connect::driver(
+            "linkedin",
+            "id".to_string(),
+            secrecy::SecretString::from("secret".to_string()),
+            "http://url".to_string(),
+        );
         assert!(linkedin.is_ok());
 
-        let x = Connect::driver("x", "id".to_string(), secrecy::SecretString::from("secret".to_string()), "http://url".to_string());
+        let x = Connect::driver(
+            "x",
+            "id".to_string(),
+            secrecy::SecretString::from("secret".to_string()),
+            "http://url".to_string(),
+        );
         assert!(x.is_ok());
 
-        let microsoft = Connect::driver("microsoft", "id".to_string(), secrecy::SecretString::from("secret".to_string()), "http://url".to_string());
+        let microsoft = Connect::driver(
+            "microsoft",
+            "id".to_string(),
+            secrecy::SecretString::from("secret".to_string()),
+            "http://url".to_string(),
+        );
         assert!(microsoft.is_ok());
 
         // Test all unsupported factory providers
-        let auth0 = Connect::driver("auth0", "id".to_string(), secrecy::SecretString::from("secret".to_string()), "http://url".to_string());
+        let auth0 = Connect::driver(
+            "auth0",
+            "id".to_string(),
+            secrecy::SecretString::from("secret".to_string()),
+            "http://url".to_string(),
+        );
         assert!(auth0.is_err());
 
-        let cognito = Connect::driver("cognito", "id".to_string(), secrecy::SecretString::from("secret".to_string()), "http://url".to_string());
+        let cognito = Connect::driver(
+            "cognito",
+            "id".to_string(),
+            secrecy::SecretString::from("secret".to_string()),
+            "http://url".to_string(),
+        );
         assert!(cognito.is_err());
 
-        let oidc = Connect::driver("oidc", "id".to_string(), secrecy::SecretString::from("secret".to_string()), "http://url".to_string());
+        let oidc = Connect::driver(
+            "oidc",
+            "id".to_string(),
+            secrecy::SecretString::from("secret".to_string()),
+            "http://url".to_string(),
+        );
         assert!(oidc.is_err());
     }
 }

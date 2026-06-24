@@ -671,7 +671,9 @@ mod tests {
         .unwrap_err();
 
         match err {
-            ConnectError::Token(msg) => assert_eq!(msg, "Failed to get access_token during refresh"),
+            ConnectError::Token(msg) => {
+                assert_eq!(msg, "Failed to get access_token during refresh")
+            }
             _ => panic!("Expected ConnectError::Token"),
         }
     }
@@ -681,7 +683,10 @@ mod tests {
         struct MockUserClient;
         #[async_trait]
         impl crate::client::HttpClient for MockUserClient {
-            async fn execute(&self, req: crate::client::HttpRequest) -> Result<crate::client::HttpResponse, crate::error::ConnectError> {
+            async fn execute(
+                &self,
+                req: crate::client::HttpRequest,
+            ) -> Result<crate::client::HttpResponse, crate::error::ConnectError> {
                 if req.url.contains("token") {
                     Ok(crate::client::HttpResponse {
                         status: 200,
@@ -700,7 +705,9 @@ mod tests {
                         }),
                     })
                 } else {
-                    Err(crate::error::ConnectError::Provider("Unexpected URL".to_string()))
+                    Err(crate::error::ConnectError::Provider(
+                        "Unexpected URL".to_string(),
+                    ))
                 }
             }
         }
@@ -708,10 +715,22 @@ mod tests {
         struct SimpleProvider;
         #[async_trait]
         impl Provider for SimpleProvider {
-            fn redirect_url(&self) -> String { "".into() }
-            fn token_url(&self) -> String { "".into() }
-            async fn get_user(&self, _params: ExchangeParams<'_>) -> Result<ConnectUser, ConnectError> { unimplemented!() }
-            async fn get_user_from_token(&self, access_token: &str) -> Result<ConnectUser, ConnectError> {
+            fn redirect_url(&self) -> String {
+                "".into()
+            }
+            fn token_url(&self) -> String {
+                "".into()
+            }
+            async fn get_user(
+                &self,
+                _params: ExchangeParams<'_>,
+            ) -> Result<ConnectUser, ConnectError> {
+                unimplemented!()
+            }
+            async fn get_user_from_token(
+                &self,
+                access_token: &str,
+            ) -> Result<ConnectUser, ConnectError> {
                 Ok(ConnectUser {
                     id: "123".into(),
                     name: "Test User".into(),
@@ -735,7 +754,15 @@ mod tests {
             code_verifier: None,
         };
 
-        let user = exchange_and_get_user(&SimpleProvider, &MockUserClient, "https://example.com/token", &form, None).await.unwrap();
+        let user = exchange_and_get_user(
+            &SimpleProvider,
+            &MockUserClient,
+            "https://example.com/token",
+            &form,
+            None,
+        )
+        .await
+        .unwrap();
         assert_eq!(user.id, "123");
         use secrecy::ExposeSecret;
         assert_eq!(user.access_token.expose_secret(), "mock_access");
@@ -748,7 +775,10 @@ mod tests {
         struct MockUserClient;
         #[async_trait]
         impl crate::client::HttpClient for MockUserClient {
-            async fn execute(&self, req: crate::client::HttpRequest) -> Result<crate::client::HttpResponse, crate::error::ConnectError> {
+            async fn execute(
+                &self,
+                req: crate::client::HttpRequest,
+            ) -> Result<crate::client::HttpResponse, crate::error::ConnectError> {
                 if req.url.contains("token") {
                     Ok(crate::client::HttpResponse {
                         status: 200,
@@ -767,7 +797,9 @@ mod tests {
                         }),
                     })
                 } else {
-                    Err(crate::error::ConnectError::Provider("Unexpected URL".to_string()))
+                    Err(crate::error::ConnectError::Provider(
+                        "Unexpected URL".to_string(),
+                    ))
                 }
             }
         }
@@ -775,10 +807,22 @@ mod tests {
         struct SimpleProvider;
         #[async_trait]
         impl Provider for SimpleProvider {
-            fn redirect_url(&self) -> String { "".into() }
-            fn token_url(&self) -> String { "".into() }
-            async fn get_user(&self, _params: ExchangeParams<'_>) -> Result<ConnectUser, ConnectError> { unimplemented!() }
-            async fn get_user_from_token(&self, access_token: &str) -> Result<ConnectUser, ConnectError> {
+            fn redirect_url(&self) -> String {
+                "".into()
+            }
+            fn token_url(&self) -> String {
+                "".into()
+            }
+            async fn get_user(
+                &self,
+                _params: ExchangeParams<'_>,
+            ) -> Result<ConnectUser, ConnectError> {
+                unimplemented!()
+            }
+            async fn get_user_from_token(
+                &self,
+                access_token: &str,
+            ) -> Result<ConnectUser, ConnectError> {
                 Ok(ConnectUser {
                     id: "123".into(),
                     name: "Test User".into(),
@@ -793,11 +837,23 @@ mod tests {
             }
         }
 
-        let user = refresh_and_get_user(&SimpleProvider, &MockUserClient, "https://example.com/token", "client_id", &secrecy::SecretString::from("secret".to_string()), "old_refresh").await.unwrap();
+        let user = refresh_and_get_user(
+            &SimpleProvider,
+            &MockUserClient,
+            "https://example.com/token",
+            "client_id",
+            &secrecy::SecretString::from("secret".to_string()),
+            "old_refresh",
+        )
+        .await
+        .unwrap();
         assert_eq!(user.id, "123");
         use secrecy::ExposeSecret;
         assert_eq!(user.access_token.expose_secret(), "refreshed_access");
-        assert_eq!(user.refresh_token.unwrap().expose_secret(), "refreshed_refresh");
+        assert_eq!(
+            user.refresh_token.unwrap().expose_secret(),
+            "refreshed_refresh"
+        );
         assert_eq!(user.expires_in, Some(3600));
     }
 }

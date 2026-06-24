@@ -134,11 +134,14 @@ mod tests {
             ConnectError::Jwt("test".to_string()),
             ConnectError::Time("test".to_string()),
             ConnectError::Token("test".to_string()),
-            ConnectError::ProviderApiError { code: "400".to_string(), message: "test".to_string() },
+            ConnectError::ProviderApiError {
+                code: "400".to_string(),
+                message: "test".to_string(),
+            },
             ConnectError::Provider("test".to_string()),
             ConnectError::InvalidState("test".to_string()),
         ];
-        
+
         for err in errors {
             let _debug = format!("{:?}", err);
             let _display = format!("{}", err);
