@@ -161,7 +161,7 @@ pub trait Provider: Send + Sync {
 }
 
 /// The response containing token information from a standard OAuth2 exchange.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Deserialize)]
 pub struct Oauth2TokenResponse {
     pub access_token: String,
     pub refresh_token: Option<String>,
