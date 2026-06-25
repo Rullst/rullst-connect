@@ -6,7 +6,7 @@ on:
       duration:
         description: 'Duration per fuzz target (seconds)'
         required: false
-        default: '3600' # 1 hora padrão por target
+        default: '18000' # 5 horas padrão por target
         type: string
   schedule:
     # Roda todo domingo às 2 da manhã (opcional)
@@ -38,7 +38,7 @@ jobs:
       - name: Run Fuzzing
         run: |
           if [ -d "fuzz" ]; then
-            cargo fuzz run ${{ matrix.target }} --target x86_64-unknown-linux-gnu -- -max_total_time=${{ github.event.inputs.duration || '3600' }}
+            cargo fuzz run ${{ matrix.target }} --target x86_64-unknown-linux-gnu -- -max_total_time=${{ github.event.inputs.duration || '18000' }}
           else
             echo "Fuzz directory not found. Please run 'cargo fuzz init' locally first."
           fi
