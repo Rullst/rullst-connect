@@ -1,11 +1,11 @@
-# rullst-connect: Security & Quality Audit Report (v10.0.1)
+# rullst-connect: Security & Quality Audit Report (v10.0.2)
 
-> **Date:** June 19, 2026  
-> **Version:** v10.0.1  
+> **Date:** June 24, 2026  
+> **Version:** v10.0.2  
 > **Auditor:** Antigravity (Google DeepMind)  
 > **Status:** ✅ Passed — Production-Ready
 
-This document provides a comprehensive, up-to-date security, performance, and quality audit for `rullst-connect` v10.0.1. It supersedes all previous audit documents (including the v9.0.1 audit). All source files, dependencies, and test suites were reviewed as part of this audit.
+This document provides a comprehensive, up-to-date security, performance, and quality audit for `rullst-connect` v10.0.2. It supersedes all previous audit documents (including the v9.0.1 audit). All source files, dependencies, and test suites were reviewed as part of this audit.
 
 ---
 
