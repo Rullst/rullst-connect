@@ -53,7 +53,7 @@ serde_urlencoded = "0.7"
 wiremock = "0.6"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 tower = { version = "0.5", features = ["util"] }
-criterion = "0.5"
+criterion = "0.8"
 loom = "0.7"
 proptest = "1"
 
