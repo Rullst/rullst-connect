@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [10.0.3] - 2026-06-27
+
+### Added
+- **Property-based Testing**: Added `proptest` to development dependencies and introduced property-based tests for PKCE challenge generation.
+- **Provider Tests**: Added missing test `test_exchange_and_get_user_fetch_user_fails` to properly cover partial token exchange failures where network succeeds but user-fetching fails.
+
+### Changed
+- **Performance Optimization**: Replaced instance-level `OnceCell` JWKS caches in `AppleProvider`, `GoogleProvider`, and `OidcProvider` with a global `LazyLock<RwLock<HashMap>>`. This eliminates redundant public key fetches on every request and prevents rate-limiting issues when instantiating providers dynamically in web frameworks like Axum.
+
 ## [10.0.2] - 2026-06-24
 
 ### Added

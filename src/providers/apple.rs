@@ -6,7 +6,6 @@ use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tokio::sync::OnceCell;
 
 pub struct AppleProvider {
     client_id: String,
@@ -18,7 +17,6 @@ pub struct AppleProvider {
     scopes: String,
     state: Option<String>,
     pkce_challenge: Option<String>,
-    jwks: OnceCell<jsonwebtoken::jwk::JwkSet>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -50,7 +48,6 @@ impl AppleProvider {
             scopes: "name email".to_string(),
             state: None,
             pkce_challenge: None,
-            jwks: OnceCell::new(),
         }
     }
 
@@ -96,20 +93,12 @@ impl AppleProvider {
         Ok(token)
     }
 
-    async fn get_jwks(&self) -> Result<&jsonwebtoken::jwk::JwkSet, crate::error::ConnectError> {
-        self.jwks
-            .get_or_try_init(|| async {
-                let res = self
-                    .http_client
-                    .get("https://appleid.apple.com/auth/keys")
-                    .send()
-                    .await?
-                    .error_for_status()?
-                    .json::<jsonwebtoken::jwk::JwkSet>()
-                    .await?;
-                Ok(res)
-            })
-            .await
+    async fn get_jwks(&self) -> Result<jsonwebtoken::jwk::JwkSet, crate::error::ConnectError> {
+        crate::provider::fetch_and_cache_jwks(
+            "https://appleid.apple.com/auth/keys",
+            self.http_client.as_ref(),
+        )
+        .await
     }
 
     async fn get_user_from_form(

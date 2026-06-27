@@ -19,7 +19,6 @@ pub struct OidcProvider {
     pub token_endpoint: String,
     pub userinfo_endpoint: String,
     pub(crate) jwks_uri: String,
-    pub(crate) jwks: tokio::sync::OnceCell<jsonwebtoken::jwk::JwkSet>,
     pub issuer: String,
 }
 
@@ -132,7 +131,6 @@ impl OidcProvider {
             token_endpoint,
             userinfo_endpoint,
             jwks_uri,
-            jwks: tokio::sync::OnceCell::new(),
             issuer,
         })
     }
@@ -157,20 +155,8 @@ impl OidcProvider {
         self
     }
 
-    async fn get_jwks(&self) -> Result<&jsonwebtoken::jwk::JwkSet, ConnectError> {
-        self.jwks
-            .get_or_try_init(|| async {
-                let res = self
-                    .http_client
-                    .get(&self.jwks_uri)
-                    .send()
-                    .await?
-                    .error_for_status()?
-                    .json::<jsonwebtoken::jwk::JwkSet>()
-                    .await?;
-                Ok(res)
-            })
-            .await
+    async fn get_jwks(&self) -> Result<jsonwebtoken::jwk::JwkSet, ConnectError> {
+        crate::provider::fetch_and_cache_jwks(&self.jwks_uri, self.http_client.as_ref()).await
     }
 
     #[tracing::instrument(skip(self, form_data))]

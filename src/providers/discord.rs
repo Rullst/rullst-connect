@@ -201,6 +201,35 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_discord_missing_fields() {
+        let provider = DiscordProvider::new(
+            "client_id".to_string(),
+            secrecy::SecretString::from("client_secret".to_string()),
+            "https://redirect.url".to_string(),
+        )
+        .with_http_client(Arc::new(MockDiscordClient {
+            token_status: 200,
+            token_body: json!({"access_token": "mock_access_token"}),
+            user_status: 200,
+            user_body: json!({"id": "123", "username": "No Email Avatar User"}),
+        }));
+
+        let user = provider
+            .get_user(crate::provider::ExchangeParams {
+                auth_code: "code",
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(user.id, "123");
+        assert_eq!(user.name, "No Email Avatar User");
+        assert_eq!(user.email, None);
+        assert_eq!(user.avatar_url, None);
+        assert_eq!(user.email_verified, None);
+    }
+
+    #[tokio::test]
     async fn test_discord_missing_id() {
         let provider = DiscordProvider::new(
             "client_id".to_string(),

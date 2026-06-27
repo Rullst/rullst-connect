@@ -547,6 +547,28 @@ mod tests {
             }
             _ => panic!("Expected ProviderApiError"),
         }
+
+        // Test case 7: >= 400 with message exceeding 512 characters
+        let long_message = "A".repeat(1000);
+        let long_msg_wrapper = ResponseWrapper {
+            res: HttpResponse {
+                status: 400,
+                body: json!({
+                    "message": long_message
+                }),
+            },
+        };
+        let long_msg_res = long_msg_wrapper.error_for_status();
+        assert!(long_msg_res.is_err());
+        match long_msg_res.expect_err("Expected error status") {
+            crate::error::ConnectError::ProviderApiError { code, message } => {
+                assert_eq!(code, "HTTP_400");
+                assert_eq!(message.len(), 512 + 15); // 512 + "... (truncated)".len()
+                assert!(message.ends_with("... (truncated)"));
+                assert!(message.starts_with(&"A".repeat(512)));
+            }
+            _ => panic!("Expected ProviderApiError"),
+        }
     }
 
     #[cfg(feature = "retry")]

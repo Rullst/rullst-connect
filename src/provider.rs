@@ -1,7 +1,41 @@
 use crate::client::HttpClientExt;
 use crate::user::ConnectUser;
 use async_trait::async_trait;
+use std::collections::HashMap;
+use std::sync::LazyLock;
+use tokio::sync::RwLock;
 
+pub static JWKS_CACHE: LazyLock<RwLock<HashMap<String, jsonwebtoken::jwk::JwkSet>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
+
+pub async fn fetch_and_cache_jwks(
+    url: &str,
+    client: &dyn crate::client::HttpClient,
+) -> Result<jsonwebtoken::jwk::JwkSet, crate::error::ConnectError> {
+    #[cfg(not(test))]
+    {
+        let cache = JWKS_CACHE.read().await;
+        if let Some(jwks) = cache.get(url) {
+            return Ok(jwks.clone());
+        }
+    }
+
+    let jwks = client
+        .get(url)
+        .send()
+        .await?
+        .error_for_status()?
+        .json::<jsonwebtoken::jwk::JwkSet>()
+        .await?;
+
+    #[cfg(not(test))]
+    {
+        let mut cache = JWKS_CACHE.write().await;
+        cache.insert(url.to_string(), jwks.clone());
+    }
+
+    Ok(jwks)
+}
 /// Helper to construct standard OAuth2 parameters to reduce boilerplate.
 pub fn build_oauth_params<'a>(
     base_url: &str,
@@ -855,5 +889,77 @@ mod tests {
             "refreshed_refresh"
         );
         assert_eq!(user.expires_in, Some(3600));
+    }
+
+    #[tokio::test]
+    async fn test_exchange_and_get_user_fetch_user_fails() {
+        struct MockSuccessTokenClient;
+        #[async_trait]
+        impl crate::client::HttpClient for MockSuccessTokenClient {
+            async fn execute(
+                &self,
+                _req: crate::client::HttpRequest,
+            ) -> Result<crate::client::HttpResponse, crate::error::ConnectError> {
+                // Return valid token response
+                Ok(crate::client::HttpResponse {
+                    status: 200,
+                    body: serde_json::json!({
+                        "access_token": "mock_access",
+                        "expires_in": 3600
+                    }),
+                })
+            }
+        }
+
+        struct FailingUserProvider;
+        #[async_trait]
+        impl Provider for FailingUserProvider {
+            fn redirect_url(&self) -> String {
+                "".into()
+            }
+            fn token_url(&self) -> String {
+                "".into()
+            }
+            async fn get_user(
+                &self,
+                _params: ExchangeParams<'_>,
+            ) -> Result<ConnectUser, ConnectError> {
+                unimplemented!()
+            }
+            async fn get_user_from_token(
+                &self,
+                _access_token: &str,
+            ) -> Result<ConnectUser, ConnectError> {
+                Err(ConnectError::Provider(
+                    "Failed to fetch user data".to_string(),
+                ))
+            }
+        }
+
+        let form = TokenExchangeForm {
+            client_id: "client",
+            client_secret: None,
+            code: "code",
+            grant_type: None,
+            redirect_uri: "uri",
+            code_verifier: None,
+        };
+
+        let result = exchange_and_get_user(
+            &FailingUserProvider,
+            &MockSuccessTokenClient,
+            "https://example.com/token",
+            &form,
+            None,
+        )
+        .await;
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ConnectError::Provider(msg) => {
+                assert_eq!(msg, "Failed to fetch user data");
+            }
+            _ => panic!("Expected ConnectError::Provider"),
+        }
     }
 }

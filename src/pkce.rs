@@ -75,4 +75,22 @@ mod tests {
             "Multiple calls should generate unique challenges"
         );
     }
+
+    use proptest::prelude::*;
+    proptest! {
+        #[test]
+        fn test_pkce_challenge_properties(verifier in "[a-zA-Z0-9-._~]{43,128}") {
+            // Compute expected challenge
+            let mut hasher = Sha256::new();
+            hasher.update(verifier.as_bytes());
+            let result = hasher.finalize();
+            let expected_challenge = general_purpose::URL_SAFE_NO_PAD.encode(result);
+
+            // Assert it does not have padding
+            prop_assert!(!expected_challenge.contains('='));
+            // Assert it's url safe (no + or /)
+            prop_assert!(!expected_challenge.contains('+'));
+            prop_assert!(!expected_challenge.contains('/'));
+        }
+    }
 }

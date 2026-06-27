@@ -3,7 +3,6 @@ use crate::provider::Provider;
 use crate::user::ConnectUser;
 use async_trait::async_trait;
 use serde_json::Value;
-use tokio::sync::OnceCell;
 
 pub struct GoogleProvider {
     pub(crate) client_id: String,
@@ -13,7 +12,6 @@ pub struct GoogleProvider {
     pub(crate) scopes: String,
     pub(crate) state: Option<String>,
     pub(crate) pkce_challenge: Option<String>,
-    pub(crate) jwks: OnceCell<jsonwebtoken::jwk::JwkSet>,
 }
 
 #[derive(serde::Deserialize)]
@@ -51,7 +49,6 @@ impl GoogleProvider {
             scopes: "openid profile email".to_string(),
             state: None,
             pkce_challenge: None,
-            jwks: OnceCell::new(),
         }
     }
 
@@ -85,20 +82,12 @@ impl GoogleProvider {
         self
     }
 
-    async fn get_jwks(&self) -> Result<&jsonwebtoken::jwk::JwkSet, crate::error::ConnectError> {
-        self.jwks
-            .get_or_try_init(|| async {
-                let res = self
-                    .http_client
-                    .get("https://www.googleapis.com/oauth2/v3/certs")
-                    .send()
-                    .await?
-                    .error_for_status()?
-                    .json::<jsonwebtoken::jwk::JwkSet>()
-                    .await?;
-                Ok(res)
-            })
-            .await
+    async fn get_jwks(&self) -> Result<jsonwebtoken::jwk::JwkSet, crate::error::ConnectError> {
+        crate::provider::fetch_and_cache_jwks(
+            "https://www.googleapis.com/oauth2/v3/certs",
+            self.http_client.as_ref(),
+        )
+        .await
     }
 
     async fn get_user_from_form(
