@@ -1,5 +1,6 @@
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, criterion_group, criterion_main};
 use rullst_connect::providers::github::GithubProvider;
+use std::hint::black_box;
 
 fn provider_benchmark(c: &mut Criterion) {
     c.bench_function("github_provider_creation", |b| {
