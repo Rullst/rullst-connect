@@ -13,6 +13,7 @@ pub async fn fetch_and_cache_jwks(
     client: &dyn crate::client::HttpClient,
 ) -> Result<jsonwebtoken::jwk::JwkSet, crate::error::ConnectError> {
     #[cfg(not(test))]
+    #[cfg_attr(coverage_nightly, coverage(off))]
     {
         let cache = JWKS_CACHE.read().await;
         if let Some(jwks) = cache.get(url) {
@@ -29,6 +30,7 @@ pub async fn fetch_and_cache_jwks(
         .await?;
 
     #[cfg(not(test))]
+    #[cfg_attr(coverage_nightly, coverage(off))]
     {
         let mut cache = JWKS_CACHE.write().await;
         cache.insert(url.to_string(), jwks.clone());
