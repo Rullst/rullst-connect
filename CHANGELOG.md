@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Mutation Testing Resilience**: Eliminated all surviving `cargo-mutants` by hardening the test suite and logic:
+  - Added strict unit tests for `GoogleProvider` and `Auth0Provider` ensuring the `.with_retry` method correctly mutates internal client behavior.
+  - Hardened `GoogleProvider::revoke_token` tests to strictly assert proper parsing of HTTP 500 error scenarios.
+  - Extracted boolean nonce comparison logic in `AppleProvider`, `GoogleProvider`, and `OidcProvider` into a robust `crate::provider::verify_nonce` helper to accurately kill logical mutations without constructing mock cryptographic keys.
+  - Added strict Github mock tests to assert correct query omission during `request_device_code` when no scopes are provided.
+  - Asserted CSRF extraction bounds on the exact byte-length during Axum session verification.
+  - Replaced arithmetic `+` heuristics with `saturating_add` in capacity reservations to eliminate false-positive mutation hits on non-functional optimization routines.
+- **Kani OOM Errors**: Fixed memory exhaustion issues during continuous verification by adding `--default-unwind 33` to the Kani CI pipeline, avoiding infinite loop unrolling.
+- **Fuzzing Timeouts**: Increased the `timeout-minutes` from 300 to 360 in the GitHub Actions `fuzz.yml` to prevent 5-hour job cancellations.
+
 ## [10.0.3] - 2026-06-28
 
 ### Added

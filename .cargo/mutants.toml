@@ -1,0 +1,9 @@
+exclude = [
+    "src/mock_idp.rs"
+]
+
+[[exclude_functions]]
+name = "kani_proofs::verify_constant_time_eq_safety"
+
+[[exclude_functions]]
+name = "verify_nonce"

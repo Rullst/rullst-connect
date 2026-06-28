@@ -419,4 +419,56 @@ mod tests {
             matches!(err, crate::error::ConnectError::Token(msg) if msg.contains("Failed to get access_token during device poll"))
         );
     }
+
+    #[tokio::test]
+    async fn test_github_request_device_code_scopes() {
+        struct MockScopeClient {
+            expect_scope: bool,
+        }
+
+        #[async_trait]
+        impl HttpClient for MockScopeClient {
+            async fn execute(
+                &self,
+                req: HttpRequest,
+            ) -> Result<HttpResponse, crate::error::ConnectError> {
+                if req.url.contains("device/code") {
+                    let body_str = req.form.unwrap_or_default();
+                    if self.expect_scope {
+                        assert!(body_str.contains("scope="));
+                    } else {
+                        assert!(!body_str.contains("scope="));
+                    }
+                    Ok(HttpResponse {
+                        status: 200,
+                        body: serde_json::json!({
+                            "device_code": "device_123",
+                            "user_code": "USER123",
+                            "verification_uri": "https://github.com/login/device",
+                            "expires_in": 900,
+                            "interval": 5
+                        }),
+                    })
+                } else {
+                    Err(crate::error::ConnectError::Provider("Unexpected URL".to_string()))
+                }
+            }
+        }
+
+        let provider_with_scope = GithubProvider::new(
+            "client_id".to_string(),
+            secrecy::SecretString::from("client_secret".to_string()),
+            "https://redirect.url".to_string(),
+        ).with_scopes(&["read:user"])
+        .with_http_client(Arc::new(MockScopeClient { expect_scope: true }));
+        provider_with_scope.request_device_code().await.unwrap();
+
+        let provider_no_scope = GithubProvider::new(
+            "client_id".to_string(),
+            secrecy::SecretString::from("client_secret".to_string()),
+            "https://redirect.url".to_string(),
+        ).with_scopes(&[])
+        .with_http_client(Arc::new(MockScopeClient { expect_scope: false }));
+        provider_no_scope.request_device_code().await.unwrap();
+    }
 }

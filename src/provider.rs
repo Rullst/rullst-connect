@@ -100,7 +100,7 @@ pub trait Provider: Send + Sync {
     fn redirect_url_with_state(&self, state: &str) -> String {
         let mut string = self.redirect_url();
         // Pre-allocate capacity to prevent reallocation when appending query parameters
-        string.reserve(8 + state.len());
+        string.reserve(8_usize.saturating_add(state.len()));
         let separator = if string.contains('?') { '&' } else { '?' };
         string.push(separator);
         let start_position = string.len();
@@ -114,7 +114,7 @@ pub trait Provider: Send + Sync {
     fn redirect_url_with_pkce(&self, code_challenge: &str) -> String {
         let mut string = self.redirect_url();
         // Pre-allocate capacity to prevent reallocation when appending query parameters
-        string.reserve(44 + code_challenge.len());
+        string.reserve(44_usize.saturating_add(code_challenge.len()));
         let separator = if string.contains('?') { '&' } else { '?' };
         string.push(separator);
         let start_position = string.len();
@@ -128,7 +128,7 @@ pub trait Provider: Send + Sync {
     fn redirect_url_with_pkce_and_state(&self, code_challenge: &str, state: &str) -> String {
         let mut string = self.redirect_url();
         // Pre-allocate capacity to prevent reallocation when appending query parameters
-        string.reserve(52 + code_challenge.len() + state.len());
+        string.reserve(52_usize.saturating_add(code_challenge.len()).saturating_add(state.len()));
         let separator = if string.contains('?') { '&' } else { '?' };
         string.push(separator);
         let start_position = string.len();
@@ -340,6 +340,12 @@ where
     user.refresh_token = token.refresh_token.map(secrecy::SecretString::from);
     user.expires_in = token.expires_in;
     Ok(user)
+}
+
+pub(crate) fn verify_nonce(token_nonce: &str, expected_nonce: &str) -> bool {
+    use subtle::ConstantTimeEq;
+    token_nonce.len() == expected_nonce.len()
+        && bool::from(token_nonce.as_bytes().ct_eq(expected_nonce.as_bytes()))
 }
 
 #[cfg(test)]

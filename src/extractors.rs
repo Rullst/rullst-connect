@@ -364,4 +364,32 @@ mod tests {
         let response = res.unwrap_err();
         assert_eq!(response.status(), axum::http::StatusCode::BAD_REQUEST);
     }
+
+    #[cfg(feature = "axum-session")]
+    #[tokio::test]
+    async fn test_axum_session_extractor_same_length_invalid_state() {
+        use axum::extract::FromRequestParts;
+        use std::sync::Arc;
+        use tower_sessions::{MemoryStore, Session};
+
+        let store = Arc::new(MemoryStore::default());
+        let session = Session::new(None, store, None);
+        session
+            .insert("oauth_state", "state_123".to_owned())
+            .await
+            .unwrap();
+
+        let mut req = axum::http::Request::builder()
+            .uri("/callback?code=auth_code_123&state=state_999")
+            .body(())
+            .unwrap();
+        req.extensions_mut().insert(session);
+
+        let (mut parts, _) = req.into_parts();
+
+        let res = AuthSession::from_request_parts(&mut parts, &()).await;
+        assert!(res.is_err());
+        let response = res.unwrap_err();
+        assert_eq!(response.status(), axum::http::StatusCode::BAD_REQUEST);
+    }
 }

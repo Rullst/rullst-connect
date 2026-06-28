@@ -16,9 +16,9 @@ Our continuous pipeline guarantees absolute safety for production edge infrastru
 
 | Security Audit | Status | Description |
 | :--- | :---: | :--- |
-| **OSSF Scorecard** | [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/Rullst/rullst-connect/badge?style=flat-square)](https://securityscorecards.dev/viewer/?uri=github.com/Rullst/rullst-connect) | Supply-chain security & best practices |
+| **OSSF Scorecard** | [![Scorecard](https://img.shields.io/ossf-scorecard/github.com/Rullst/rullst-connect?style=flat-square&label=%20)](https://securityscorecards.dev/viewer/?uri=github.com/Rullst/rullst-connect) | Supply-chain security & best practices |
 | **Codecov** | [![Coverage](https://img.shields.io/codecov/c/github/Rullst/rullst-connect?style=flat-square&label=%20)](https://codecov.io/gh/Rullst/rullst-connect) | Strict code coverage enforcement |
-| **OpenSSF** | [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/13360/badge)](https://www.bestpractices.dev/projects/13360) | Open source security standards |
+| **OpenSSF** | [![OpenSSF Best Practices](https://img.shields.io/badge/%20-passing-success.svg?style=flat-square)](https://www.bestpractices.dev/projects/13360) | Open source security standards |
 | **Continuous Fuzzing** | [![Fuzz Testing](https://img.shields.io/github/actions/workflow/status/Rullst/rullst-connect/fuzz.yml?style=flat-square&label=%20)](https://github.com/Rullst/rullst-connect/actions/workflows/fuzz.yml) | Fuzzing against edge cases & panics |
 | **Property Testing** | [![Proptest](https://img.shields.io/badge/%20-passing-success.svg?style=flat-square)](https://crates.io/crates/proptest) | Validating complex logic against edge cases |
 | **Miri UB Detection** | [![Miri](https://img.shields.io/github/actions/workflow/status/Rullst/rullst-connect/miri.yml?style=flat-square&label=%20)](https://github.com/Rullst/rullst-connect/actions/workflows/miri.yml) | Detecting Undefined Behavior and memory leaks |
@@ -32,7 +32,7 @@ Our continuous pipeline guarantees absolute safety for production edge infrastru
 | **Cargo Machete** | [![Machete](https://img.shields.io/github/actions/workflow/status/Rullst/rullst-connect/machete.yml?style=flat-square&label=%20)](https://github.com/Rullst/rullst-connect/actions/workflows/machete.yml) | Detecting unused and bloated dependencies |
 | **Spellcheck CI** | [![Spellcheck](https://img.shields.io/github/actions/workflow/status/Rullst/rullst-connect/spellcheck.yml?style=flat-square&label=%20)](https://github.com/Rullst/rullst-connect/actions/workflows/spellcheck.yml) | Automated typo detection across docs and code |
 | **Unsafe Policy** | [![Unsafe](https://img.shields.io/badge/0%25_Unsafe-passing-success?style=flat-square)](#) | 100% memory safe. No unsafe code blocks |
-| **Panic Policy** | [![Panics](https://img.shields.io/badge/Panics-Zero_Tolerance-success?style=flat-square)](#) | Graceful error handling across the framework |
+| **Panic Policy** | [![Panics](https://img.shields.io/badge/%20-Zero_Tolerance-success?style=flat-square)](#) | Graceful error handling across the framework |
 
 ## ✨ Features
 

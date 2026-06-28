@@ -187,10 +187,7 @@ impl AppleProvider {
 
         if let Some(nonce) = expected_nonce {
             let token_nonce = payload["nonce"].as_str().unwrap_or("");
-            use subtle::ConstantTimeEq;
-            if token_nonce.len() != nonce.len()
-                || !bool::from(token_nonce.as_bytes().ct_eq(nonce.as_bytes()))
-            {
+            if !crate::provider::verify_nonce(token_nonce, nonce) {
                 return Err(crate::error::ConnectError::Provider(
                     "Apple id_token nonce mismatch".to_owned(),
                 ));

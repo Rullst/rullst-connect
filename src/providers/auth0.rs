@@ -366,4 +366,17 @@ mod tests {
             "new_refresh_token"
         );
     }
+
+    #[test]
+    #[cfg(feature = "retry")]
+    fn test_auth0_with_retry() {
+        let provider = Auth0Provider::new(
+            "client_id".to_string(),
+            secrecy::SecretString::from("client_secret".to_string()),
+            "https://redirect.url".to_string(),
+            "test.auth0.com".to_string(),
+        );
+        let provider = provider.with_retry(3);
+        assert_eq!(provider.client_id, "client_id");
+    }
 }

@@ -160,10 +160,7 @@ impl GoogleProvider {
 
                 if let Some(nonce) = expected_nonce {
                     let token_nonce = p["nonce"].as_str().unwrap_or("");
-                    use subtle::ConstantTimeEq;
-                    if token_nonce.len() != nonce.len()
-                        || !bool::from(token_nonce.as_bytes().ct_eq(nonce.as_bytes()))
-                    {
+                    if !crate::provider::verify_nonce(token_nonce, nonce) {
                         return Err(crate::error::ConnectError::Provider(
                             "Google id_token nonce mismatch".to_owned(),
                         ));
@@ -719,7 +716,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_google_revoke_token() {
-        struct MockRevokeClient;
+        struct MockRevokeClient(u16);
         #[async_trait]
         impl HttpClient for MockRevokeClient {
             async fn execute(
@@ -728,7 +725,7 @@ mod tests {
             ) -> Result<HttpResponse, crate::error::ConnectError> {
                 if req.url.contains("revoke") {
                     Ok(HttpResponse {
-                        status: 200,
+                        status: self.0,
                         body: json!({}),
                     })
                 } else {
@@ -744,8 +741,27 @@ mod tests {
             secrecy::SecretString::from("client_secret".to_string()),
             "https://redirect.url".to_string(),
         )
-        .with_http_client(Arc::new(MockRevokeClient));
-
+        .with_http_client(Arc::new(MockRevokeClient(200)));
         provider.revoke_token("some_token").await.unwrap();
+
+        let provider_err = GoogleProvider::new(
+            "client_id".to_string(),
+            secrecy::SecretString::from("client_secret".to_string()),
+            "https://redirect.url".to_string(),
+        )
+        .with_http_client(Arc::new(MockRevokeClient(500)));
+        assert!(provider_err.revoke_token("some_token").await.is_err());
+    }
+
+    #[test]
+    #[cfg(feature = "retry")]
+    fn test_google_with_retry() {
+        let provider = GoogleProvider::new(
+            "client_id".to_string(),
+            secrecy::SecretString::from("client_secret".to_string()),
+            "https://redirect.url".to_string(),
+        );
+        let provider = provider.with_retry(3);
+        assert_eq!(provider.client_id, "client_id");
     }
 }
