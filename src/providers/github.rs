@@ -450,7 +450,9 @@ mod tests {
                         }),
                     })
                 } else {
-                    Err(crate::error::ConnectError::Provider("Unexpected URL".to_string()))
+                    Err(crate::error::ConnectError::Provider(
+                        "Unexpected URL".to_string(),
+                    ))
                 }
             }
         }
@@ -459,7 +461,8 @@ mod tests {
             "client_id".to_string(),
             secrecy::SecretString::from("client_secret".to_string()),
             "https://redirect.url".to_string(),
-        ).with_scopes(&["read:user"])
+        )
+        .with_scopes(&["read:user"])
         .with_http_client(Arc::new(MockScopeClient { expect_scope: true }));
         provider_with_scope.request_device_code().await.unwrap();
 
@@ -467,8 +470,11 @@ mod tests {
             "client_id".to_string(),
             secrecy::SecretString::from("client_secret".to_string()),
             "https://redirect.url".to_string(),
-        ).with_scopes(&[])
-        .with_http_client(Arc::new(MockScopeClient { expect_scope: false }));
+        )
+        .with_scopes(&[])
+        .with_http_client(Arc::new(MockScopeClient {
+            expect_scope: false,
+        }));
         provider_no_scope.request_device_code().await.unwrap();
     }
 }

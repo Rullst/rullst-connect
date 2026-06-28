@@ -128,7 +128,11 @@ pub trait Provider: Send + Sync {
     fn redirect_url_with_pkce_and_state(&self, code_challenge: &str, state: &str) -> String {
         let mut string = self.redirect_url();
         // Pre-allocate capacity to prevent reallocation when appending query parameters
-        string.reserve(52_usize.saturating_add(code_challenge.len()).saturating_add(state.len()));
+        string.reserve(
+            52_usize
+                .saturating_add(code_challenge.len())
+                .saturating_add(state.len()),
+        );
         let separator = if string.contains('?') { '&' } else { '?' };
         string.push(separator);
         let start_position = string.len();
