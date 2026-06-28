@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [10.0.3] - 2026-06-27
+## [10.0.3] - 2026-06-28
 
 ### Added
 - **Property-based Testing**: Added `proptest` to development dependencies and introduced property-based tests for PKCE challenge generation.
