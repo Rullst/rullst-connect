@@ -1,0 +1,23 @@
+name: Cargo Audit
+on:
+  push:
+    branches: [ "main", "dev" ]
+  pull_request:
+    branches: [ "main" ]
+  schedule:
+    - cron: '0 0 * * 0' # Run weekly on Sundays
+
+permissions: read-all
+
+jobs:
+  audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@cargo-audit
+        
+      - name: Run cargo-audit
+        run: cargo audit
