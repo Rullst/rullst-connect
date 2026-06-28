@@ -322,6 +322,32 @@ mod tests {
         assert!(url.contains("response_mode=form_post"));
     }
 
+    #[test]
+    fn test_apple_generate_client_secret_exp() {
+        let provider = AppleProvider::new(
+            "client_id".to_string(),
+            "team_id".to_string(),
+            "key_id".to_string(),
+            "-----BEGIN PRIVATE KEY-----\n\
+            MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgkdn4ngP0MJj/+G/Z\n\
+            0FgfmUYbc26Oidgl0NZoUXoMm6KhRANCAARcJ2gzcG1e8qufjKrOWQSmC4OoQkAU\n\
+            k/Tz7c8S43tqF0VK/mNC462881k2cryVtuV5FkH1XoPACJzJUQ5igUZV\n\
+            -----END PRIVATE KEY-----".to_string(),
+            "https://redirect.url".to_string(),
+        );
+
+        let secret = provider.generate_client_secret().unwrap();
+        // Decode without signature verification to check claims
+        let parts: Vec<&str> = secret.split('.').collect();
+        use base64::Engine;
+        let payload_bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(parts[1]).unwrap();
+        let claims: AppleClaims = serde_json::from_slice(&payload_bytes).unwrap();
+        
+        assert_eq!(claims.exp, claims.iat + 300);
+        assert_eq!(claims.iss, "team_id");
+        assert_eq!(claims.sub, "client_id");
+    }
+
     #[tokio::test]
     async fn test_apple_get_user_from_token_invalid() {
         let provider = AppleProvider::new(

@@ -208,6 +208,16 @@ mod tests {
             _ => panic!("Expected ConnectError::InvalidState"),
         }
 
+        // 2.5 State mismatch (different length)
+        let res_mismatch_len = callback_valid.verify_state("state_12345");
+        assert!(res_mismatch_len.is_err());
+        match res_mismatch_len.unwrap_err() {
+            crate::error::ConnectError::InvalidState(msg) => {
+                assert_eq!(msg, "CSRF state mismatch");
+            }
+            _ => panic!("Expected ConnectError::InvalidState"),
+        }
+
         // 3. State missing
         let callback_missing = AuthCallback {
             code: None,
@@ -254,6 +264,23 @@ mod tests {
             actix_web::test::TestRequest::with_uri("/callback?code=a&code=b").to_http_request();
         let res_err = AuthCallback::from_request(&req_err, payload).await;
         assert!(res_err.is_err());
+    }
+
+    #[cfg(feature = "axum")]
+    #[tokio::test]
+    async fn test_axum_extractor() {
+        use axum::extract::FromRequestParts;
+
+        let req = axum::http::Request::builder()
+            .uri("/callback?code=axum_code&state=axum_state")
+            .body(())
+            .unwrap();
+        
+        let (mut parts, _) = req.into_parts();
+        let callback = AuthCallback::from_request_parts(&mut parts, &()).await.unwrap();
+        
+        assert_eq!(callback.code.as_deref(), Some("axum_code"));
+        assert_eq!(callback.state.as_deref(), Some("axum_state"));
     }
 
     #[cfg(feature = "axum-session")]
@@ -306,7 +333,7 @@ mod tests {
             .uri("/callback?code=auth_code_123&state=state_123")
             .body(())
             .unwrap();
-        req.extensions_mut().insert(session);
+        req.extensions_mut().insert(session.clone());
 
         let (mut parts, _) = req.into_parts();
 
@@ -314,6 +341,17 @@ mod tests {
         assert!(res.is_err());
         let response = res.unwrap_err();
         assert_eq!(response.status(), axum::http::StatusCode::BAD_REQUEST);
+
+        // Also test missing state in session
+        session.remove::<String>("oauth_state").await.unwrap();
+        let mut req2 = axum::http::Request::builder()
+            .uri("/callback?code=auth_code_123&state=state_123")
+            .body(())
+            .unwrap();
+        req2.extensions_mut().insert(session);
+        let (mut parts2, _) = req2.into_parts();
+        let res2 = AuthSession::from_request_parts(&mut parts2, &()).await;
+        assert!(res2.is_err());
     }
 
     #[cfg(feature = "axum-session")]

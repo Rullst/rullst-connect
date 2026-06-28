@@ -376,7 +376,9 @@ mod tests {
             "https://redirect.url".to_string(),
             "test.auth0.com".to_string(),
         );
+        let original_client = provider.http_client.clone();
         let provider = provider.with_retry(3);
         assert_eq!(provider.client_id, "client_id");
+        assert!(!std::sync::Arc::ptr_eq(&provider.http_client, &original_client));
     }
 }

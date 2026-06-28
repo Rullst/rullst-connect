@@ -234,7 +234,6 @@ impl HttpClient for ReqwestClient {
     async fn execute(&self, req: HttpRequest) -> Result<HttpResponse, crate::error::ConnectError> {
         tracing::debug!("Executing HTTP request");
         let method = match req.method.as_str() {
-            "GET" => reqwest::Method::GET,
             "POST" => reqwest::Method::POST,
             _ => reqwest::Method::GET,
         };
@@ -313,20 +312,7 @@ impl HttpClient for ReqwestClient {
 
         // Fast path parsing of `Content-Length` manipulating bytes directly,
         // bypassing string allocation and UTF-8 validation since bytes are ASCII digits.
-        let capacity = res
-            .headers()
-            .get(reqwest::header::CONTENT_LENGTH)
-            .map(|h| h.as_bytes())
-            .and_then(|bytes| {
-                bytes.iter().try_fold(0usize, |acc, &b| {
-                    if b.is_ascii_digit() {
-                        Some(acc.saturating_mul(10).saturating_add((b - b'0') as usize))
-                    } else {
-                        None
-                    }
-                })
-            })
-            .unwrap_or(8 * 1024);
+        let capacity = parse_content_length(res.headers()).unwrap_or(8192);
 
         const MAX_BODY_SIZE: usize = 2 * 1024 * 1024; // 2MB limit
 
@@ -376,6 +362,22 @@ impl HttpClient for ReqwestClient {
 
 pub static DEFAULT_HTTP_CLIENT: std::sync::LazyLock<std::sync::Arc<dyn HttpClient>> =
     std::sync::LazyLock::new(|| std::sync::Arc::new(ReqwestClient::new()));
+
+#[cfg(not(miri))]
+fn parse_content_length(headers: &reqwest::header::HeaderMap) -> Option<usize> {
+    headers
+        .get(reqwest::header::CONTENT_LENGTH)
+        .map(|h| h.as_bytes())
+        .and_then(|bytes| {
+            bytes.iter().try_fold(0usize, |acc, &b| {
+                if b.is_ascii_digit() {
+                    Some(acc.saturating_mul(10).saturating_add((b - b'0') as usize))
+                } else {
+                    None
+                }
+            })
+        })
+}
 
 #[cfg(test)]
 mod tests {
@@ -575,5 +577,122 @@ mod tests {
     #[test]
     fn test_reqwest_client_new_with_retry() {
         let _client = ReqwestClient::new_with_retry(3);
+    }
+
+    #[test]
+    fn test_parse_content_length() {
+        #[cfg(not(miri))]
+        {
+            let mut headers = reqwest::header::HeaderMap::new();
+            assert_eq!(parse_content_length(&headers), None);
+            headers.insert(reqwest::header::CONTENT_LENGTH, "12345".parse().unwrap());
+            assert_eq!(parse_content_length(&headers), Some(12345));
+            headers.insert(reqwest::header::CONTENT_LENGTH, "invalid".parse().unwrap());
+            assert_eq!(parse_content_length(&headers), None);
+        }
+    }
+
+    #[test]
+    fn test_error_for_status_exact_512() {
+        let exact_512 = "A".repeat(512);
+        let wrapper = ResponseWrapper {
+            res: HttpResponse {
+                status: 400,
+                body: json!({
+                    "message": exact_512
+                }),
+            },
+        };
+        let res = wrapper.error_for_status();
+        assert!(res.is_err());
+        match res.unwrap_err() {
+            crate::error::ConnectError::ProviderApiError { message, .. } => {
+                assert_eq!(message.len(), 512);
+                assert!(!message.ends_with("... (truncated)"));
+            }
+            _ => panic!("Expected ProviderApiError"),
+        }
+    }
+
+    #[tokio::test]
+    #[cfg(not(miri))]
+    async fn test_reqwest_client_execute() {
+        use wiremock::{MockServer, Mock, ResponseTemplate};
+        use wiremock::matchers::{method, path, header};
+
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/test"))
+            .and(header("X-Test", "Value"))
+            .and(header("Authorization", "Bearer my_token"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"status": "ok"})))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let client = ReqwestClient::new();
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert("X-Test", "Value".parse().unwrap());
+        
+        let req = HttpRequest {
+            method: "POST".to_string(),
+            url: format!("{}/test", mock_server.uri()),
+            headers,
+            form: None,
+            json: None,
+            basic_auth: None,
+            bearer_auth: Some("my_token".to_string()),
+        };
+
+        let res = client.execute(req).await.unwrap();
+        assert_eq!(res.status, 200);
+        assert_eq!(res.body["status"], "ok");
+    }
+
+    #[tokio::test]
+    #[cfg(all(not(miri), feature = "retry"))]
+    async fn test_reqwest_client_execute_retry() {
+        use wiremock::{MockServer, Mock, ResponseTemplate};
+        use wiremock::matchers::{method, path};
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let mock_server = MockServer::start().await;
+
+        // A mock that returns 500 twice, then 200
+        struct RetryMock {
+            calls: AtomicUsize,
+        }
+        impl wiremock::Respond for RetryMock {
+            fn respond(&self, _request: &wiremock::Request) -> ResponseTemplate {
+                let current = self.calls.fetch_add(1, Ordering::SeqCst);
+                if current < 2 {
+                    ResponseTemplate::new(500)
+                } else {
+                    ResponseTemplate::new(200).set_body_json(json!({"success": true}))
+                }
+            }
+        }
+
+        Mock::given(method("GET"))
+            .and(path("/retry_test"))
+            .respond_with(RetryMock { calls: AtomicUsize::new(0) })
+            .expect(3) // 2 failures + 1 success
+            .mount(&mock_server)
+            .await;
+
+        let client = ReqwestClient::new_with_retry(3);
+        let req = HttpRequest {
+            method: "GET".to_string(),
+            url: format!("{}/retry_test", mock_server.uri()),
+            headers: reqwest::header::HeaderMap::new(),
+            form: None,
+            json: None,
+            basic_auth: None,
+            bearer_auth: None,
+        };
+
+        let res = client.execute(req).await.unwrap();
+        assert_eq!(res.status, 200);
     }
 }

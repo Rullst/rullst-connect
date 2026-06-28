@@ -761,7 +761,9 @@ mod tests {
             secrecy::SecretString::from("client_secret".to_string()),
             "https://redirect.url".to_string(),
         );
+        let original_client = provider.http_client.clone();
         let provider = provider.with_retry(3);
         assert_eq!(provider.client_id, "client_id");
+        assert!(!std::sync::Arc::ptr_eq(&provider.http_client, &original_client));
     }
 }
