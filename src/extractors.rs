@@ -275,10 +275,12 @@ mod tests {
             .uri("/callback?code=axum_code&state=axum_state")
             .body(())
             .unwrap();
-        
+
         let (mut parts, _) = req.into_parts();
-        let callback = AuthCallback::from_request_parts(&mut parts, &()).await.unwrap();
-        
+        let callback = AuthCallback::from_request_parts(&mut parts, &())
+            .await
+            .unwrap();
+
         assert_eq!(callback.code.as_deref(), Some("axum_code"));
         assert_eq!(callback.state.as_deref(), Some("axum_state"));
     }

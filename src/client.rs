@@ -617,8 +617,8 @@ mod tests {
     #[tokio::test]
     #[cfg(not(miri))]
     async fn test_reqwest_client_execute() {
-        use wiremock::{MockServer, Mock, ResponseTemplate};
-        use wiremock::matchers::{method, path, header};
+        use wiremock::matchers::{header, method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
 
         let mock_server = MockServer::start().await;
 
@@ -634,7 +634,7 @@ mod tests {
         let client = ReqwestClient::new();
         let mut headers = reqwest::header::HeaderMap::new();
         headers.insert("X-Test", "Value".parse().unwrap());
-        
+
         let req = HttpRequest {
             method: "POST".to_string(),
             url: format!("{}/test", mock_server.uri()),
@@ -653,9 +653,9 @@ mod tests {
     #[tokio::test]
     #[cfg(all(not(miri), feature = "retry"))]
     async fn test_reqwest_client_execute_retry() {
-        use wiremock::{MockServer, Mock, ResponseTemplate};
-        use wiremock::matchers::{method, path};
         use std::sync::atomic::{AtomicUsize, Ordering};
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
 
         let mock_server = MockServer::start().await;
 
@@ -676,7 +676,9 @@ mod tests {
 
         Mock::given(method("GET"))
             .and(path("/retry_test"))
-            .respond_with(RetryMock { calls: AtomicUsize::new(0) })
+            .respond_with(RetryMock {
+                calls: AtomicUsize::new(0),
+            })
             .expect(3) // 2 failures + 1 success
             .mount(&mock_server)
             .await;

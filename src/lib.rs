@@ -112,7 +112,9 @@ mod tests {
             secrecy::SecretString::from("secret".to_string()),
             "http://url".to_string(),
         );
-        assert!(matches!(apple, Err(crate::error::ConnectError::Provider(ref msg)) if msg.contains("requires custom configuration")));
+        assert!(
+            matches!(apple, Err(crate::error::ConnectError::Provider(ref msg)) if msg.contains("requires custom configuration"))
+        );
 
         let unknown = Connect::driver(
             "unknown",
@@ -178,7 +180,9 @@ mod tests {
             secrecy::SecretString::from("secret".to_string()),
             "http://url".to_string(),
         );
-        assert!(matches!(auth0, Err(crate::error::ConnectError::Provider(ref msg)) if msg.contains("requires custom configuration")));
+        assert!(
+            matches!(auth0, Err(crate::error::ConnectError::Provider(ref msg)) if msg.contains("requires custom configuration"))
+        );
 
         let cognito = Connect::driver(
             "cognito",
@@ -186,7 +190,9 @@ mod tests {
             secrecy::SecretString::from("secret".to_string()),
             "http://url".to_string(),
         );
-        assert!(matches!(cognito, Err(crate::error::ConnectError::Provider(ref msg)) if msg.contains("requires custom configuration")));
+        assert!(
+            matches!(cognito, Err(crate::error::ConnectError::Provider(ref msg)) if msg.contains("requires custom configuration"))
+        );
 
         let oidc = Connect::driver(
             "oidc",
@@ -194,6 +200,8 @@ mod tests {
             secrecy::SecretString::from("secret".to_string()),
             "http://url".to_string(),
         );
-        assert!(matches!(oidc, Err(crate::error::ConnectError::Provider(ref msg)) if msg.contains("requires custom configuration")));
+        assert!(
+            matches!(oidc, Err(crate::error::ConnectError::Provider(ref msg)) if msg.contains("requires custom configuration"))
+        );
     }
 }
