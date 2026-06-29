@@ -244,10 +244,7 @@ impl HttpClient for ReqwestClient {
         let mut res = {
             let mut builder = self.client.request(method, &req.url);
 
-            #[cfg_attr(test, mutants::skip)]
-            if !req.headers.is_empty() {
-                builder = builder.headers(req.headers);
-            }
+            builder = builder.headers(req.headers);
 
             if let Some(token) = &req.bearer_auth {
                 builder = builder.bearer_auth(token);
