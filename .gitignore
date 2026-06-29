@@ -2,3 +2,5 @@
 /fuzz/target
 /prompts-e-comandos-importantes
 Cargo.lock
+*.pdb
+coverage*.json
