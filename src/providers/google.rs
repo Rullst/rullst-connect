@@ -764,9 +764,21 @@ mod tests {
         let original_client = provider.http_client.clone();
         let provider = provider.with_retry(3);
         assert_eq!(provider.client_id, "client_id");
+        // New client must differ from the one before calling with_retry.
         assert!(!std::sync::Arc::ptr_eq(
             &provider.http_client,
             &original_client
         ));
+        // Kills the mutant `replace with_retry -> Self with Default::default()`:
+        // Default::default() would clone the global DEFAULT_HTTP_CLIENT, so the
+        // new http_client would be ptr_eq to it. A real with_retry creates a
+        // fresh ReqwestClient, which is a distinct allocation.
+        assert!(
+            !std::sync::Arc::ptr_eq(
+                &provider.http_client,
+                &crate::client::DEFAULT_HTTP_CLIENT
+            ),
+            "with_retry must create a new client, not reuse DEFAULT_HTTP_CLIENT"
+        );
     }
 }

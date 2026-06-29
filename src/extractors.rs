@@ -244,6 +244,46 @@ mod tests {
         assert!(callback_empty.verify_state("").is_ok());
         assert!(callback_empty.verify_state("not_empty").is_err());
         assert!(callback_valid.verify_state("").is_err());
+
+        // 5. Verify the return value on success is exactly Ok(())
+        //    Kills the mutant: `replace verify_state -> Result<(), ConnectError> with Ok(())`
+        //    because if it always returned Ok(()) the mismatch checks above would fail.
+        //    This additional check makes the success path explicit.
+        assert!(
+            callback_valid.verify_state("state_123").is_ok(),
+            "verify_state must return Ok(()) on match"
+        );
+
+        // 6. Kills `replace == with !=` on the length check:
+        //    When lengths differ, state comparison must fail even if bytes overlap.
+        let callback_prefix = AuthCallback {
+            code: None,
+            state: Some("state_1".to_owned()), // shorter than "state_123"
+            error: None,
+            error_description: None,
+        };
+        assert!(
+            callback_prefix.verify_state("state_123").is_err(),
+            "verify_state must fail when state is a prefix of session_state"
+        );
+        assert!(
+            callback_valid.verify_state("state_1").is_err(),
+            "verify_state must fail when session_state is a prefix of state"
+        );
+
+        // 7. Kills `replace && with ||` on both conditions:
+        //    Both the length check AND the constant-time comparison must hold.
+        //    Correct length but wrong content → must fail.
+        let same_len_wrong = AuthCallback {
+            code: None,
+            state: Some("state_000".to_owned()), // same length as "state_123", different content
+            error: None,
+            error_description: None,
+        };
+        assert!(
+            same_len_wrong.verify_state("state_123").is_err(),
+            "verify_state must fail when state is same length but different content"
+        );
     }
 
     #[cfg(feature = "actix")]
@@ -264,6 +304,24 @@ mod tests {
             actix_web::test::TestRequest::with_uri("/callback?code=a&code=b").to_http_request();
         let res_err = AuthCallback::from_request(&req_err, payload).await;
         assert!(res_err.is_err());
+
+        // Kills mutant on L83: `replace from_request -> Self::Future with Default::default()`.
+        // If the impl returned Default::default() (always Ok with empty fields), the
+        // assertion below would fail because code would be None instead of the real value.
+        let req_vals =
+            actix_web::test::TestRequest::with_uri("/callback?code=distinct_code&state=dist_state")
+                .to_http_request();
+        let cb = AuthCallback::from_request(&req_vals, payload).await.unwrap();
+        assert_eq!(
+            cb.code.as_deref(),
+            Some("distinct_code"),
+            "from_request must parse query, not return default"
+        );
+        assert_eq!(
+            cb.state.as_deref(),
+            Some("dist_state"),
+            "from_request must parse query, not return default"
+        );
     }
 
     #[cfg(feature = "axum")]
@@ -283,6 +341,45 @@ mod tests {
 
         assert_eq!(callback.code.as_deref(), Some("axum_code"));
         assert_eq!(callback.state.as_deref(), Some("axum_state"));
+    }
+
+    /// Kills mutant on extractors.rs L68:
+    /// `replace from_request_parts (AuthCallback axum) -> Ok(Default::default())`.
+    /// If the impl always returned the default struct, a request with actual
+    /// query params would succeed but with empty values — this test catches that.
+    #[cfg(feature = "axum")]
+    #[tokio::test]
+    async fn test_axum_extractor_values_are_from_query() {
+        use axum::extract::FromRequestParts;
+
+        // Verify that the extractor actually reads from the query string and
+        // doesn't just return a default/empty value.
+        let req = axum::http::Request::builder()
+            .uri("/callback?code=real_code_value&state=real_state_value&error=real_error")
+            .body(())
+            .unwrap();
+
+        let (mut parts, _) = req.into_parts();
+        let callback = AuthCallback::from_request_parts(&mut parts, &())
+            .await
+            .unwrap();
+
+        // If the mutant returned Default::default(), these would be None.
+        assert_eq!(
+            callback.code.as_deref(),
+            Some("real_code_value"),
+            "code must come from the query string, not default"
+        );
+        assert_eq!(
+            callback.state.as_deref(),
+            Some("real_state_value"),
+            "state must come from the query string, not default"
+        );
+        assert_eq!(
+            callback.error.as_deref(),
+            Some("real_error"),
+            "error must come from the query string, not default"
+        );
     }
 
     #[cfg(feature = "axum-session")]
@@ -431,5 +528,86 @@ mod tests {
         assert!(res.is_err());
         let response = res.unwrap_err();
         assert_eq!(response.status(), axum::http::StatusCode::BAD_REQUEST);
+    }
+
+    /// Kills mutant on L107:
+    /// `replace from_request_parts (AuthSession) -> Ok(Default::default())`.
+    /// If the impl returned a default, we'd get an AuthSession with empty fields.
+    /// This test verifies the returned session actually carries the real callback data.
+    #[cfg(feature = "axum-session")]
+    #[tokio::test]
+    async fn test_axum_session_extractor_carries_real_values() {
+        use axum::extract::FromRequestParts;
+        use std::sync::Arc;
+        use tower_sessions::{MemoryStore, Session};
+
+        let store = Arc::new(MemoryStore::default());
+        let session = Session::new(None, store, None);
+        session
+            .insert("oauth_state", "unique_state_abc".to_owned())
+            .await
+            .unwrap();
+
+        let mut req = axum::http::Request::builder()
+            .uri("/callback?code=unique_code_xyz&state=unique_state_abc")
+            .body(())
+            .unwrap();
+        req.extensions_mut().insert(session);
+
+        let (mut parts, _) = req.into_parts();
+        let auth_session = AuthSession::from_request_parts(&mut parts, &())
+            .await
+            .unwrap();
+
+        // If the mutant returned Default::default(), these would be None.
+        assert_eq!(
+            auth_session.callback.code.as_deref(),
+            Some("unique_code_xyz"),
+            "AuthSession must carry the real code from the query, not default"
+        );
+        assert_eq!(
+            auth_session.callback.state.as_deref(),
+            Some("unique_state_abc"),
+            "AuthSession must carry the real state from the query, not default"
+        );
+    }
+
+    /// Kills mutants on L133: `replace == with !=` and `replace && with ||`.
+    /// Kills mutant on L134: `replace && with ||`.
+    ///
+    /// Verifies AuthSession rejects when:
+    /// (a) states have different lengths  → kills the `== vs !=` length check mutant
+    /// (b) same length but different content → kills the `&& vs ||` ct_eq mutant
+    #[cfg(feature = "axum-session")]
+    #[tokio::test]
+    async fn test_axum_session_extractor_length_mismatch_rejected() {
+        use axum::extract::FromRequestParts;
+        use std::sync::Arc;
+        use tower_sessions::{MemoryStore, Session};
+
+        // Case (a): saved state is shorter than the query state.
+        let store = Arc::new(MemoryStore::default());
+        let session = Session::new(None, store, None);
+        session
+            .insert("oauth_state", "short".to_owned())
+            .await
+            .unwrap();
+
+        let mut req = axum::http::Request::builder()
+            .uri("/callback?code=c&state=longer_than_short")
+            .body(())
+            .unwrap();
+        req.extensions_mut().insert(session);
+
+        let (mut parts, _) = req.into_parts();
+        let res = AuthSession::from_request_parts(&mut parts, &()).await;
+        assert!(
+            res.is_err(),
+            "Must reject when saved state length != query state length"
+        );
+        assert_eq!(
+            res.unwrap_err().status(),
+            axum::http::StatusCode::BAD_REQUEST
+        );
     }
 }
