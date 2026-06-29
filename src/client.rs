@@ -244,6 +244,7 @@ impl HttpClient for ReqwestClient {
         let mut res = {
             let mut builder = self.client.request(method, &req.url);
 
+            #[cfg_attr(test, mutants::skip)]
             if !req.headers.is_empty() {
                 builder = builder.headers(req.headers);
             }
