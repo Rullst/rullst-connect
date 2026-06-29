@@ -211,11 +211,13 @@ impl ReqwestClient {
 
 #[cfg(miri)]
 impl ReqwestClient {
+    #[cfg_attr(test, mutants::skip)]
     pub fn new() -> Self {
         Self {}
     }
 
     #[cfg(feature = "retry")]
+    #[cfg_attr(test, mutants::skip)]
     pub fn new_with_retry(_max_retries: u32) -> Self {
         Self {}
     }
@@ -353,6 +355,7 @@ impl HttpClient for ReqwestClient {
 #[cfg(miri)]
 #[async_trait]
 impl HttpClient for ReqwestClient {
+    #[cfg_attr(test, mutants::skip)]
     async fn execute(&self, _req: HttpRequest) -> Result<HttpResponse, crate::error::ConnectError> {
         Err(crate::error::ConnectError::Provider(
             "Network requests are not supported under Miri".to_string(),
@@ -882,5 +885,53 @@ mod tests {
         assert_eq!(res.status, 200);
         // If the mutant deleted `!`, headers would be skipped and the mock
         // (which requires the X-Custom header) would not match → 404.
+    }
+
+    /// Kills mutant on L195: `replace ReqwestClient::new_with_retry -> Self with Default::default()`.
+    /// Verifies that the client actually respects the custom retry count.
+    #[tokio::test]
+    #[cfg(all(not(miri), feature = "retry"))]
+    async fn test_reqwest_client_new_with_retry_custom_retries() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let mock_server = MockServer::start().await;
+
+        let calls = Arc::new(AtomicUsize::new(0));
+        let calls_clone = calls.clone();
+
+        struct CounterMock {
+            calls: Arc<AtomicUsize>,
+        }
+        impl wiremock::Respond for CounterMock {
+            fn respond(&self, _request: &wiremock::Request) -> ResponseTemplate {
+                self.calls.fetch_add(1, Ordering::SeqCst);
+                ResponseTemplate::new(500)
+            }
+        }
+
+        Mock::given(method("GET"))
+            .and(path("/retry_count"))
+            .respond_with(CounterMock { calls: calls_clone })
+            .mount(&mock_server)
+            .await;
+
+        // Create client with 1 retry (total 2 attempts max)
+        let client = ReqwestClient::new_with_retry(1);
+        let req = HttpRequest {
+            method: "GET".to_string(),
+            url: format!("{}/retry_count", mock_server.uri()),
+            headers: reqwest::header::HeaderMap::new(),
+            form: None,
+            json: None,
+            basic_auth: None,
+            bearer_auth: None,
+        };
+
+        let res = client.execute(req).await.unwrap();
+        assert_eq!(res.status, 500);
+        // Must have made exactly 2 attempts (1 initial + 1 retry)
+        assert_eq!(calls.load(Ordering::SeqCst), 2);
     }
 }

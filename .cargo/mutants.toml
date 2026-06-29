@@ -1,3 +1,5 @@
+all_features = true
+
 exclude_globs = [
     "src/mock_idp.rs"
 ]
