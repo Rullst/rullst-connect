@@ -7,16 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [10.0.4] - 2026-06-28
+
 ### Fixed
-- **Mutation Testing Resilience**: Eliminated all surviving `cargo-mutants` by hardening the test suite and logic:
-  - Added strict unit tests for `GoogleProvider` and `Auth0Provider` ensuring the `.with_retry` method correctly mutates internal client behavior.
-  - Hardened `GoogleProvider::revoke_token` tests to strictly assert proper parsing of HTTP 500 error scenarios.
-  - Extracted boolean nonce comparison logic in `AppleProvider`, `GoogleProvider`, and `OidcProvider` into a robust `crate::provider::verify_nonce` helper to accurately kill logical mutations without constructing mock cryptographic keys.
-  - Added strict Github mock tests to assert correct query omission during `request_device_code` when no scopes are provided.
-  - Asserted CSRF extraction bounds on the exact byte-length during Axum session verification.
-  - Replaced arithmetic `+` heuristics with `saturating_add` in capacity reservations to eliminate false-positive mutation hits on non-functional optimization routines.
-- **Kani OOM Errors**: Fixed memory exhaustion issues during continuous verification by adding `--default-unwind 33` to the Kani CI pipeline, avoiding infinite loop unrolling.
-- **Fuzzing Timeouts**: Increased the `timeout-minutes` from 300 to 360 in the GitHub Actions `fuzz.yml` to prevent 5-hour job cancellations.
+- **Mutation Testing Resilience**: Eliminated all 19 surviving `cargo-mutants` mutants by hardening the test suite:
+  - **`src/client.rs`**: Added precise boundary tests for the 2 MiB response body size limit (`test_body_size_limit_exceeded`, `test_body_size_limit_exact_boundary_succeeds`), verifying both that over-limit bodies are rejected and that exact-limit bodies are accepted. Added `test_retry_branch_headers_are_forwarded` to kill the `delete !` mutant on the `!req.headers.is_empty()` guard in the retry branch. Strengthened `test_reqwest_client_new_with_retry_is_distinct_from_default` to use heap address comparison instead of a trivial existence check.
+  - **`src/extractors.rs`**: Added explicit assertions to `test_verify_state` covering prefix-length mismatches (`== vs !=` mutant), same-length / different-content mismatches (`&& vs ||` mutant), and the `Ok(())` replacement mutant. Added `test_axum_extractor_values_are_from_query` and expanded `test_actix_extractor` to assert that real query-string values are returned, killing the `Ok(Default::default())` mutant on both framework extractors. Added `test_axum_session_extractor_carries_real_values` and `test_axum_session_extractor_length_mismatch_rejected` to cover the `AuthSession` replacement and logical-operator mutants.
+  - **`src/providers/auth0.rs`** and **`src/providers/google.rs`**: Strengthened `test_auth0_with_retry` and `test_google_with_retry` to additionally assert that the new `http_client` is not pointer-equal to the global `DEFAULT_HTTP_CLIENT`, killing the `replace with_retry -> Self with Default::default()` mutant that previously escaped the weaker `ptr_eq` check.
+- **`cargo fmt` Compliance**: Fixed formatting regressions introduced by the previous release, ensuring `cargo fmt -- --check` passes on CI.
 
 ## [10.0.3] - 2026-06-28
 

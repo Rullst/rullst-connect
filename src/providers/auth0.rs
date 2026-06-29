@@ -389,10 +389,7 @@ mod tests {
         // new http_client would be ptr_eq to it. A real with_retry creates a
         // fresh ReqwestClient, which is a distinct allocation.
         assert!(
-            !std::sync::Arc::ptr_eq(
-                &provider.http_client,
-                &crate::client::DEFAULT_HTTP_CLIENT
-            ),
+            !std::sync::Arc::ptr_eq(&provider.http_client, &crate::client::DEFAULT_HTTP_CLIENT),
             "with_retry must create a new client, not reuse DEFAULT_HTTP_CLIENT"
         );
     }

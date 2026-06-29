@@ -603,7 +603,10 @@ mod tests {
         // Different heap allocations → different addresses.
         let pa = &*a as *const ReqwestClient as usize;
         let pb = &*b as *const ReqwestClient as usize;
-        assert_ne!(pa, pb, "new_with_retry must allocate a new client, not reuse default");
+        assert_ne!(
+            pa, pb,
+            "new_with_retry must allocate a new client, not reuse default"
+        );
     }
 
     #[test]

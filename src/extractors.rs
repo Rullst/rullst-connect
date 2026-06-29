@@ -311,7 +311,9 @@ mod tests {
         let req_vals =
             actix_web::test::TestRequest::with_uri("/callback?code=distinct_code&state=dist_state")
                 .to_http_request();
-        let cb = AuthCallback::from_request(&req_vals, payload).await.unwrap();
+        let cb = AuthCallback::from_request(&req_vals, payload)
+            .await
+            .unwrap();
         assert_eq!(
             cb.code.as_deref(),
             Some("distinct_code"),
