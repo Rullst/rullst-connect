@@ -133,10 +133,12 @@ impl GoogleProvider {
                 })?;
 
                 let alg = match header.alg {
-                    jsonwebtoken::Algorithm::HS256
-                    | jsonwebtoken::Algorithm::HS384
-                    | jsonwebtoken::Algorithm::HS512 => jsonwebtoken::Algorithm::RS256,
-                    other => other,
+                    jsonwebtoken::Algorithm::RS256 => jsonwebtoken::Algorithm::RS256,
+                    _ => {
+                        return Err(crate::error::ConnectError::Provider(
+                            "Unsupported algorithm in id_token header".to_string(),
+                        ));
+                    }
                 };
                 let mut validation = jsonwebtoken::Validation::new(alg);
                 validation.set_audience(&[&self.client_id]);

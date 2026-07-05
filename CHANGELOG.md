@@ -5,7 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [10.0.5] - 2026-07-05
+
+### Security
+- **CI/CD Credential Protection**: Added a new Gitleaks GitHub Actions workflow to block leaked secrets and API keys in Pull Requests before they are merged.
+- **JWT Algorithm Confusion Mitigation**: Hardened the generic `OidcProvider`, `AppleProvider`, and `GoogleProvider`'s `id_token` validation to strictly enforce asymmetric cryptographic algorithms (e.g., `RS256`, `ES256`). This patches a critical vulnerability where an attacker could bypass signature checks by providing a symmetric algorithm (like `HS256`) or `none` in the token header.
+- **SLSA Level 3 Build Provenance**: Added official GitHub Actions workflow steps to generate verifiable SLSA Level 3 build provenance attestations for crates published to crates.io. Added the SLSA Level 3 badge to the README.
+
+### Added
+- **Extractors Edge Case Testing**: Added explicit test case ensuring `AuthCallback::verify_state` returns `ConnectError::InvalidState` when the `state` parameter is completely missing.
+- **Secret Deserialization Testing**: Added test coverage for `Option<SecretString>` custom serde deserialization.
+- **Prelude Testing**: Added compilation tests for the library's `prelude` module to ensure all re-exports remain accessible.
+- **Mock Implementations**: Filled out `get_user` and `get_user_from_token` in `DummyProvider` with valid mock data to prevent accidental panics in consumer tests.
+
+### Maintenance
+- **Dependabot Bumps**: Updated multiple GitHub Actions workflows to their latest stable versions (`actions/checkout@v7.0.0`, `codecov/codecov-action@v7.0.0`, `actions/cache@v6.1.0`, and `github/codeql-action@v4.36.3`).
 
 ## [10.0.4] - 2026-06-28
 

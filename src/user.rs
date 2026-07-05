@@ -171,4 +171,26 @@ mod tests {
         let _cloned_device = device.clone();
         let _debug_device = format!("{:?}", device);
     }
+
+    #[derive(Debug, serde::Deserialize, serde::Serialize)]
+    struct TestOptSecret {
+        #[serde(with = "crate::user::opt_secret_serde")]
+        pub secret: Option<secrecy::SecretString>,
+    }
+
+    #[test]
+    fn test_opt_secret_serde_deserialize() {
+        use secrecy::ExposeSecret;
+
+        // Test with a value
+        let json_with_val = r#"{"secret": "my_super_secret"}"#;
+        let parsed: TestOptSecret = serde_json::from_str(json_with_val).unwrap();
+        assert!(parsed.secret.is_some());
+        assert_eq!(parsed.secret.unwrap().expose_secret(), "my_super_secret");
+
+        // Test with null
+        let json_with_null = r#"{"secret": null}"#;
+        let parsed_null: TestOptSecret = serde_json::from_str(json_with_null).unwrap();
+        assert!(parsed_null.secret.is_none());
+    }
 }

@@ -374,14 +374,24 @@ mod tests {
         }
 
         async fn get_user(&self, _params: ExchangeParams<'_>) -> Result<ConnectUser, ConnectError> {
-            unimplemented!()
+            self.get_user_from_token("dummy_access_token").await
         }
 
         async fn get_user_from_token(
             &self,
-            _access_token: &str,
+            access_token: &str,
         ) -> Result<ConnectUser, ConnectError> {
-            unimplemented!()
+            Ok(ConnectUser {
+                id: "dummy_id".into(),
+                name: "Dummy User".into(),
+                email: Some("dummy@example.com".into()),
+                email_verified: Some(true),
+                avatar_url: None,
+                raw_data: serde_json::json!({}),
+                access_token: secrecy::SecretString::from(access_token.to_string()),
+                refresh_token: None,
+                expires_in: None,
+            })
         }
     }
 

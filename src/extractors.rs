@@ -286,6 +286,22 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_verify_state_missing_state_edge_case() {
+        let callback_missing = AuthCallback {
+            code: Some("some_code".to_owned()),
+            state: None,
+            error: None,
+            error_description: None,
+        };
+        
+        let err = callback_missing.verify_state("session_state_123").unwrap_err();
+        assert!(matches!(err, crate::error::ConnectError::InvalidState(_)));
+        if let crate::error::ConnectError::InvalidState(msg) = err {
+            assert_eq!(msg, "State missing in callback");
+        }
+    }
+
     #[cfg(feature = "actix")]
     #[tokio::test]
     async fn test_actix_extractor() {
