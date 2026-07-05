@@ -798,10 +798,15 @@ mod tests {
 
         let id_token = jsonwebtoken::encode(&header, &claims, &priv_key).unwrap();
 
-        struct MockClient { id_token: String }
+        struct MockClient {
+            id_token: String,
+        }
         #[async_trait]
         impl HttpClient for MockClient {
-            async fn execute(&self, req: HttpRequest) -> Result<HttpResponse, crate::error::ConnectError> {
+            async fn execute(
+                &self,
+                req: HttpRequest,
+            ) -> Result<HttpResponse, crate::error::ConnectError> {
                 if req.url.contains("token") {
                     Ok(HttpResponse {
                         status: 200,
@@ -826,7 +831,10 @@ mod tests {
                         }),
                     })
                 } else {
-                    Ok(HttpResponse { status: 200, body: serde_json::json!({}) })
+                    Ok(HttpResponse {
+                        status: 200,
+                        body: serde_json::json!({}),
+                    })
                 }
             }
         }
@@ -835,12 +843,20 @@ mod tests {
             "client_id".to_string(),
             secrecy::SecretString::from("client_secret".to_string()),
             "https://redirect.url".to_string(),
-        ).with_http_client(std::sync::Arc::new(MockClient { id_token }));
+        )
+        .with_http_client(std::sync::Arc::new(MockClient { id_token }));
 
-        let err = provider.get_user(crate::provider::ExchangeParams {
-            auth_code: "code", expected_nonce: Some("test_nonce"), ..Default::default()
-        }).await.unwrap_err();
+        let err = provider
+            .get_user(crate::provider::ExchangeParams {
+                auth_code: "code",
+                expected_nonce: Some("test_nonce"),
+                ..Default::default()
+            })
+            .await
+            .unwrap_err();
 
-        assert!(matches!(err, crate::error::ConnectError::Provider(msg) if msg.contains("Unsupported algorithm")));
+        assert!(
+            matches!(err, crate::error::ConnectError::Provider(msg) if msg.contains("Unsupported algorithm"))
+        );
     }
 }

@@ -832,10 +832,15 @@ k/Tz7c8S43tqF0VK/mNC462881k2cryVtuV5FkH1XoPACJzJUQ5igUZV\n\
 
         let id_token = jsonwebtoken::encode(&header, &claims, &priv_key).unwrap();
 
-        struct MockClient { id_token: String }
+        struct MockClient {
+            id_token: String,
+        }
         #[async_trait]
         impl HttpClient for MockClient {
-            async fn execute(&self, req: HttpRequest) -> Result<HttpResponse, crate::error::ConnectError> {
+            async fn execute(
+                &self,
+                req: HttpRequest,
+            ) -> Result<HttpResponse, crate::error::ConnectError> {
                 if req.url.contains("token") {
                     Ok(HttpResponse {
                         status: 200,
@@ -860,7 +865,10 @@ k/Tz7c8S43tqF0VK/mNC462881k2cryVtuV5FkH1XoPACJzJUQ5igUZV\n\
                         }),
                     })
                 } else {
-                    Ok(HttpResponse { status: 200, body: serde_json::json!({}) })
+                    Ok(HttpResponse {
+                        status: 200,
+                        body: serde_json::json!({}),
+                    })
                 }
             }
         }
@@ -871,7 +879,8 @@ k/Tz7c8S43tqF0VK/mNC462881k2cryVtuV5FkH1XoPACJzJUQ5igUZV\n\
             "key_id".to_string(),
             "private_key".to_string(),
             "https://redirect.url".to_string(),
-        ).with_http_client(std::sync::Arc::new(MockClient { id_token }));
+        )
+        .with_http_client(std::sync::Arc::new(MockClient { id_token }));
 
         let form_data = crate::provider::TokenExchangeForm {
             client_id: "client_id",
@@ -882,8 +891,13 @@ k/Tz7c8S43tqF0VK/mNC462881k2cryVtuV5FkH1XoPACJzJUQ5igUZV\n\
             code_verifier: None,
         };
 
-        let err = provider.get_user_from_form(&form_data, Some("test_nonce")).await.unwrap_err();
+        let err = provider
+            .get_user_from_form(&form_data, Some("test_nonce"))
+            .await
+            .unwrap_err();
 
-        assert!(matches!(err, crate::error::ConnectError::Provider(msg) if msg.contains("Unsupported algorithm")));
+        assert!(
+            matches!(err, crate::error::ConnectError::Provider(msg) if msg.contains("Unsupported algorithm"))
+        );
     }
 }
