@@ -22,7 +22,7 @@ mod tests {
     fn test_prelude_exports() {
         // Verify that core types are in scope via the prelude
         let _err = ConnectError::Provider("test".to_string());
-        
+
         #[cfg(any(feature = "axum", feature = "actix"))]
         let _cb = AuthCallback {
             code: None,

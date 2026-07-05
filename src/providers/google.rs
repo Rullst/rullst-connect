@@ -780,4 +780,67 @@ mod tests {
             "with_retry must create a new client, not reuse DEFAULT_HTTP_CLIENT"
         );
     }
+
+    #[tokio::test]
+    async fn test_google_id_token_invalid_algorithm() {
+        let secret = b"super_secret_key_123456789012345";
+        let priv_key = jsonwebtoken::EncodingKey::from_secret(secret);
+        let mut header = jsonwebtoken::Header::new(jsonwebtoken::Algorithm::HS256);
+        header.kid = Some("valid_kid".to_string());
+
+        let claims = serde_json::json!({
+            "iss": "https://accounts.google.com",
+            "aud": "client_id",
+            "exp": 9999999999u64,
+            "sub": "user_123",
+            "nonce": "test_nonce"
+        });
+
+        let id_token = jsonwebtoken::encode(&header, &claims, &priv_key).unwrap();
+
+        struct MockClient { id_token: String }
+        #[async_trait]
+        impl HttpClient for MockClient {
+            async fn execute(&self, req: HttpRequest) -> Result<HttpResponse, crate::error::ConnectError> {
+                if req.url.contains("token") {
+                    Ok(HttpResponse {
+                        status: 200,
+                        body: serde_json::json!({
+                            "access_token": "mock",
+                            "id_token": self.id_token
+                        }),
+                    })
+                } else if req.url.contains("certs") {
+                    Ok(HttpResponse {
+                        status: 200,
+                        body: serde_json::json!({
+                            "keys": [
+                                {
+                                    "kid": "valid_kid",
+                                    "kty": "RSA",
+                                    "alg": "RS256",
+                                    "n": "sWwEyNwXz_oht6BVZqJiGoKVFRWyeesgSgJYcM4GwWS_Y45iEkZdbYuPlewORhVz8JE7tfTmVVInRmLDAoAEeTB-knrZPjaL0poZmCiCGbbNOa8lUXPbJJrYFbQlGhwMOBfZOpeJcjat3xuJRtqkmaq6_bGu9BfJGUOwzZ3rP835JChqR_oOmUpcC6EPR9BB0pdrvBYZ_tlsKhgmNJI6dtK1NfQTiIr4tj49IiSaVCI2cyIxKf2kzWu5j9YfqKtcTUlqQkO26WCcdBjO2NLRiV0Sn-QLGPlQJ0oDmQjD_SUO9xnsNmtIpbdkH6J-nrKH0wW9FQW79617Up6qbu7XBQ",
+                                    "e": "AQAB"
+                                }
+                            ]
+                        }),
+                    })
+                } else {
+                    Ok(HttpResponse { status: 200, body: serde_json::json!({}) })
+                }
+            }
+        }
+
+        let provider = GoogleProvider::new(
+            "client_id".to_string(),
+            secrecy::SecretString::from("client_secret".to_string()),
+            "https://redirect.url".to_string(),
+        ).with_http_client(std::sync::Arc::new(MockClient { id_token }));
+
+        let err = provider.get_user(crate::provider::ExchangeParams {
+            auth_code: "code", expected_nonce: Some("test_nonce"), ..Default::default()
+        }).await.unwrap_err();
+
+        assert!(matches!(err, crate::error::ConnectError::Provider(msg) if msg.contains("Unsupported algorithm")));
+    }
 }

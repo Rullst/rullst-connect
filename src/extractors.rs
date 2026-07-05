@@ -294,8 +294,10 @@ mod tests {
             error: None,
             error_description: None,
         };
-        
-        let err = callback_missing.verify_state("session_state_123").unwrap_err();
+
+        let err = callback_missing
+            .verify_state("session_state_123")
+            .unwrap_err();
         assert!(matches!(err, crate::error::ConnectError::InvalidState(_)));
         if let crate::error::ConnectError::InvalidState(msg) = err {
             assert_eq!(msg, "State missing in callback");

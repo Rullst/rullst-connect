@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [10.0.5] - 2026-07-05
 
 ### Security
-- **CI/CD Credential Protection**: Added a new Gitleaks GitHub Actions workflow to block leaked secrets and API keys in Pull Requests before they are merged.
+- **CI/CD Credential Protection**: Added a new TruffleHog GitHub Actions workflow to block leaked secrets and API keys in Pull Requests before they are merged.
 - **JWT Algorithm Confusion Mitigation**: Hardened the generic `OidcProvider`, `AppleProvider`, and `GoogleProvider`'s `id_token` validation to strictly enforce asymmetric cryptographic algorithms (e.g., `RS256`, `ES256`). This patches a critical vulnerability where an attacker could bypass signature checks by providing a symmetric algorithm (like `HS256`) or `none` in the token header.
 - **SLSA Level 3 Build Provenance**: Added official GitHub Actions workflow steps to generate verifiable SLSA Level 3 build provenance attestations for crates published to crates.io. Added the SLSA Level 3 badge to the README.
 

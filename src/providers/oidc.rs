@@ -209,7 +209,12 @@ impl OidcProvider {
                     | jsonwebtoken::Algorithm::ES256
                     | jsonwebtoken::Algorithm::ES384
                     | jsonwebtoken::Algorithm::EdDSA => header.alg,
-                    _ => return Err(crate::error::ConnectError::Provider("OIDC token header specifies an insecure or symmetric algorithm".to_string())),
+                    _ => {
+                        return Err(crate::error::ConnectError::Provider(
+                            "OIDC token header specifies an insecure or symmetric algorithm"
+                                .to_string(),
+                        ));
+                    }
                 };
                 let mut validation = jsonwebtoken::Validation::new(alg);
                 validation.set_audience(&[&self.client_id]);
