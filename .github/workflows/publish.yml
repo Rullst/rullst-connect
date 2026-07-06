@@ -27,7 +27,7 @@ jobs:
         run: cargo package --allow-dirty
 
       - name: Generate artifact attestation (SLSA Level 3)
-        uses: actions/attest-build-provenance@v1
+        uses: actions/attest-build-provenance@ef244123eb79f2f7a7e75d99086184180e6d0018 # v1
         with:
           subject-path: 'target/package/*.crate'
 
