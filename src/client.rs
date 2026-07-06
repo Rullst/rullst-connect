@@ -211,13 +211,11 @@ impl ReqwestClient {
 
 #[cfg(miri)]
 impl ReqwestClient {
-    #[cfg_attr(test, mutants::skip)]
     pub fn new() -> Self {
         Self {}
     }
 
     #[cfg(feature = "retry")]
-    #[cfg_attr(test, mutants::skip)]
     pub fn new_with_retry(_max_retries: u32) -> Self {
         Self {}
     }
@@ -353,7 +351,6 @@ impl HttpClient for ReqwestClient {
 #[cfg(miri)]
 #[async_trait]
 impl HttpClient for ReqwestClient {
-    #[cfg_attr(test, mutants::skip)]
     async fn execute(&self, _req: HttpRequest) -> Result<HttpResponse, crate::error::ConnectError> {
         Err(crate::error::ConnectError::Provider(
             "Network requests are not supported under Miri".to_string(),
