@@ -143,6 +143,48 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_token_handler_valid_code() {
+        let form = TokenForm {
+            client_id: "test".to_string(),
+            client_secret: "test".to_string(),
+            code: "mock_auth_code_12345".to_string(),
+            grant_type: "authorization_code".to_string(),
+            redirect_uri: "http://test".to_string(),
+        };
+
+        let response = token_handler(axum::extract::Form(form))
+            .await
+            .into_response();
+        let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("Failed to read response body bytes");
+        let json: serde_json::Value =
+            serde_json::from_slice(&body_bytes).expect("Failed to parse response body as JSON");
+
+        assert_eq!(json["access_token"], "mock_access_token_abcde");
+    }
+
+    #[tokio::test]
+    async fn test_authorize_handler() {
+        let query = AuthQuery {
+            client_id: "test_client".to_string(),
+            redirect_uri: "http://example.com/callback".to_string(),
+            response_type: "code".to_string(),
+            scope: Some("openid profile".to_string()),
+            state: Some("test_state".to_string()),
+        };
+
+        let response = authorize_handler(axum::extract::Query(query))
+            .await
+            .into_response();
+        
+        assert_eq!(response.status(), axum::http::StatusCode::TEMPORARY_REDIRECT);
+        let headers = response.headers();
+        let location = headers.get(axum::http::header::LOCATION).unwrap().to_str().unwrap();
+        assert_eq!(location, "http://example.com/callback?code=mock_auth_code_12345&state=test_state");
+    }
+
+    #[tokio::test]
     async fn test_mock_router_discovery() {
         use axum::{body::Body, http::Request};
         use tower::ServiceExt;

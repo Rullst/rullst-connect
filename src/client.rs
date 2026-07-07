@@ -291,7 +291,8 @@ impl HttpClient for ReqwestClient {
                 );
             } else if let Some(j) = req.json {
                 // reqwest_middleware::RequestBuilder doesn't have `.json()`, we set body and headers manually
-                let body = serde_json::to_string(&j).unwrap_or_default();
+                let body = serde_json::to_string(&j)
+                    .map_err(|e| crate::error::ConnectError::Request(e.to_string()))?;
                 builder = builder
                     .body(body)
                     .header(reqwest::header::CONTENT_TYPE, "application/json");
@@ -442,6 +443,31 @@ mod tests {
         );
         assert_eq!(req.json, Some(json!({"hello": "world"})));
         assert_eq!(req.form, Some("param1=val1&param2=val2".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_http_client_ext_methods() {
+        let captured = Arc::new(tokio::sync::Mutex::new(None));
+        let client_impl = TestClient {
+            captured_req: captured.clone(),
+        };
+        let client: &dyn HttpClient = &client_impl;
+
+        let get_req = client.get("https://example.com/get");
+        let _ = get_req.send().await;
+        {
+            let req = captured.lock().await.take().expect("Request should be captured");
+            assert_eq!(req.method, "GET");
+            assert_eq!(req.url, "https://example.com/get");
+        }
+
+        let post_req = client.post("https://example.com/post");
+        let _ = post_req.send().await;
+        {
+            let req = captured.lock().await.take().expect("Request should be captured");
+            assert_eq!(req.method, "POST");
+            assert_eq!(req.url, "https://example.com/post");
+        }
     }
 
     #[test]

@@ -5,13 +5,13 @@ use std::collections::HashMap;
 use std::sync::LazyLock;
 use tokio::sync::RwLock;
 
-pub static JWKS_CACHE: LazyLock<RwLock<HashMap<String, jsonwebtoken::jwk::JwkSet>>> =
+pub static JWKS_CACHE: LazyLock<RwLock<HashMap<String, std::sync::Arc<jsonwebtoken::jwk::JwkSet>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 
 pub async fn fetch_and_cache_jwks(
     url: &str,
     client: &dyn crate::client::HttpClient,
-) -> Result<jsonwebtoken::jwk::JwkSet, crate::error::ConnectError> {
+) -> Result<std::sync::Arc<jsonwebtoken::jwk::JwkSet>, crate::error::ConnectError> {
     #[cfg(not(test))]
     #[cfg_attr(coverage_nightly, coverage(off))]
     {
@@ -29,14 +29,16 @@ pub async fn fetch_and_cache_jwks(
         .json::<jsonwebtoken::jwk::JwkSet>()
         .await?;
 
+    let jwks_arc = std::sync::Arc::new(jwks);
+
     #[cfg(not(test))]
     #[cfg_attr(coverage_nightly, coverage(off))]
     {
         let mut cache = JWKS_CACHE.write().await;
-        cache.insert(url.to_string(), jwks.clone());
+        cache.insert(url.to_string(), jwks_arc.clone());
     }
 
-    Ok(jwks)
+    Ok(jwks_arc)
 }
 /// Helper to construct standard OAuth2 parameters to reduce boilerplate.
 pub fn build_oauth_params<'a>(
@@ -348,8 +350,12 @@ where
 
 pub(crate) fn verify_nonce(token_nonce: &str, expected_nonce: &str) -> bool {
     use subtle::ConstantTimeEq;
-    token_nonce.len() == expected_nonce.len()
-        && bool::from(token_nonce.as_bytes().ct_eq(expected_nonce.as_bytes()))
+    use sha2::{Digest, Sha256};
+
+    let hash_token = Sha256::digest(token_nonce.as_bytes());
+    let hash_expected = Sha256::digest(expected_nonce.as_bytes());
+
+    bool::from(hash_token.ct_eq(&hash_expected))
 }
 
 #[cfg(test)]

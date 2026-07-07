@@ -30,16 +30,14 @@ impl AuthCallback {
     /// Helper to verify the CSRF state parameter.
     pub fn verify_state(&self, session_state: &str) -> Result<(), crate::error::ConnectError> {
         use subtle::ConstantTimeEq;
+        use sha2::{Digest, Sha256};
+        
         match &self.state {
             Some(state) => {
-                let state_bytes = state.as_bytes();
-                let session_bytes = session_state.as_bytes();
+                let hash_state = Sha256::digest(state.as_bytes());
+                let hash_session = Sha256::digest(session_state.as_bytes());
 
-                // ConstantTimeEq panics if slices have different lengths!
-                // We MUST check lengths first to avoid a trivial DoS vulnerability.
-                if state_bytes.len() == session_bytes.len()
-                    && bool::from(state_bytes.ct_eq(session_bytes))
-                {
+                if bool::from(hash_state.ct_eq(&hash_session)) {
                     Ok(())
                 } else {
                     Err(crate::error::ConnectError::InvalidState(

@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.0.6] - 2026-07-07
+
+### Performance
+- **JWKS Cache Optimization**: Improved `JWKS_CACHE` to store `Arc<JwkSet>` instead of the full JSON structure. This eliminates deep cloning during cache hits and reduces memory allocations under high concurrent OIDC authentication load.
+
+### Security
+- **Timing Attack Mitigation**: Secured `verify_nonce` and `verify_state` against potential length-based timing attacks by hashing inputs using `SHA256` before applying constant-time comparisons.
+- **Strict JSON Serialization Errors**: Replaced `unwrap_or_default()` in HTTP client with strict error handling (`map_err`) to avoid accidentally sending empty bodies on payload serialization failures.
+
+### Added
+- **Test Coverage**: Added test coverage for `HttpClientExt` helper methods (`.get()` and `.post()`).
+- **Mock IDP Coverage**: Added tests for valid authorization and token exchange paths in the end-to-end `mock_idp` utilities.
+
 ## [10.0.5] - 2026-07-05
 
 ### Security

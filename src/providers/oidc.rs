@@ -155,7 +155,7 @@ impl OidcProvider {
         self
     }
 
-    async fn get_jwks(&self) -> Result<jsonwebtoken::jwk::JwkSet, ConnectError> {
+    async fn get_jwks(&self) -> Result<std::sync::Arc<jsonwebtoken::jwk::JwkSet>, ConnectError> {
         crate::provider::fetch_and_cache_jwks(&self.jwks_uri, self.http_client.as_ref()).await
     }
 
