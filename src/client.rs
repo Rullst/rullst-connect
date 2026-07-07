@@ -163,19 +163,56 @@ pub struct ReqwestClient {
 #[cfg(miri)]
 pub struct ReqwestClient {}
 
-#[cfg(not(miri))]
 impl ReqwestClient {
     pub fn new() -> Self {
-        let reqwest_client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(10))
-            .pool_idle_timeout(std::time::Duration::from_secs(90))
-            .build()
-            .unwrap_or_else(|_| reqwest::Client::new());
-
-        #[cfg(feature = "retry")]
+        #[cfg(miri)]
         {
-            let retry_policy =
-                reqwest_retry::policies::ExponentialBackoff::builder().build_with_max_retries(3);
+            Self {}
+        }
+        #[cfg(not(miri))]
+        {
+            let reqwest_client = reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(10))
+                .pool_idle_timeout(std::time::Duration::from_secs(90))
+                .build()
+                .unwrap_or_else(|_| reqwest::Client::new());
+
+            #[cfg(feature = "retry")]
+            {
+                let retry_policy =
+                    reqwest_retry::policies::ExponentialBackoff::builder().build_with_max_retries(3);
+                let client = reqwest_middleware::ClientBuilder::new(reqwest_client)
+                    .with(reqwest_retry::RetryTransientMiddleware::new_with_policy(
+                        retry_policy,
+                    ))
+                    .build();
+                Self { client }
+            }
+
+            #[cfg(not(feature = "retry"))]
+            Self {
+                client: reqwest_client,
+            }
+        }
+    }
+
+    #[cfg(feature = "retry")]
+    pub fn new_with_retry(max_retries: u32) -> Self {
+        #[cfg(miri)]
+        {
+            let _ = max_retries;
+            Self {}
+        }
+        #[cfg(not(miri))]
+        {
+            let reqwest_client = reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(10))
+                .pool_idle_timeout(std::time::Duration::from_secs(90))
+                .build()
+                .unwrap_or_else(|_| reqwest::Client::new());
+
+            let retry_policy = reqwest_retry::policies::ExponentialBackoff::builder()
+                .build_with_max_retries(max_retries.min(10));
             let client = reqwest_middleware::ClientBuilder::new(reqwest_client)
                 .with(reqwest_retry::RetryTransientMiddleware::new_with_policy(
                     retry_policy,
@@ -183,41 +220,6 @@ impl ReqwestClient {
                 .build();
             Self { client }
         }
-
-        #[cfg(not(feature = "retry"))]
-        Self {
-            client: reqwest_client,
-        }
-    }
-
-    #[cfg(feature = "retry")]
-    pub fn new_with_retry(max_retries: u32) -> Self {
-        let reqwest_client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(10))
-            .pool_idle_timeout(std::time::Duration::from_secs(90))
-            .build()
-            .unwrap_or_else(|_| reqwest::Client::new());
-
-        let retry_policy = reqwest_retry::policies::ExponentialBackoff::builder()
-            .build_with_max_retries(max_retries.min(10));
-        let client = reqwest_middleware::ClientBuilder::new(reqwest_client)
-            .with(reqwest_retry::RetryTransientMiddleware::new_with_policy(
-                retry_policy,
-            ))
-            .build();
-        Self { client }
-    }
-}
-
-#[cfg(miri)]
-impl ReqwestClient {
-    pub fn new() -> Self {
-        Self {}
-    }
-
-    #[cfg(feature = "retry")]
-    pub fn new_with_retry(_max_retries: u32) -> Self {
-        Self {}
     }
 }
 
@@ -227,135 +229,134 @@ impl Default for ReqwestClient {
     }
 }
 
-#[cfg(not(miri))]
 #[async_trait]
 impl HttpClient for ReqwestClient {
     #[tracing::instrument(skip(self, req), fields(method = %req.method, url = %req.url))]
     async fn execute(&self, req: HttpRequest) -> Result<HttpResponse, crate::error::ConnectError> {
-        tracing::debug!("Executing HTTP request");
-        let method = match req.method.as_str() {
-            "POST" => reqwest::Method::POST,
-            _ => reqwest::Method::GET,
-        };
-
-        #[cfg(not(feature = "retry"))]
-        let mut res = {
-            let mut builder = self.client.request(method, &req.url);
-
-            builder = builder.headers(req.headers);
-
-            if let Some(token) = &req.bearer_auth {
-                builder = builder.bearer_auth(token);
-            }
-
-            if let Some((user, pass)) = &req.basic_auth {
-                builder = builder.basic_auth(user, pass.as_deref());
-            }
-
-            if let Some(f) = req.form {
-                builder = builder.body(f).header(
-                    reqwest::header::CONTENT_TYPE,
-                    "application/x-www-form-urlencoded",
-                );
-            } else if let Some(j) = req.json {
-                builder = builder.json(&j);
-            }
-
-            builder
-                .send()
-                .await
-                .map_err(crate::error::ConnectError::from)?
-        };
-
-        #[cfg(feature = "retry")]
-        let mut res = {
-            let mut builder = self.client.request(method, &req.url);
-
-            if !req.headers.is_empty() {
-                builder = builder.headers(req.headers);
-            }
-
-            if let Some(token) = &req.bearer_auth {
-                builder = builder.bearer_auth(token);
-            }
-
-            if let Some((user, pass)) = &req.basic_auth {
-                builder = builder.basic_auth(user, pass.as_deref());
-            }
-
-            if let Some(body) = req.form {
-                // reqwest_middleware::RequestBuilder doesn't have `.form()`, we set body and headers manually
-                builder = builder.body(body).header(
-                    reqwest::header::CONTENT_TYPE,
-                    "application/x-www-form-urlencoded",
-                );
-            } else if let Some(j) = req.json {
-                // reqwest_middleware::RequestBuilder doesn't have `.json()`, we set body and headers manually
-                let body = serde_json::to_string(&j)
-                    .map_err(|e| crate::error::ConnectError::Json(e.to_string()))?;
-                builder = builder
-                    .body(body)
-                    .header(reqwest::header::CONTENT_TYPE, "application/json");
-            }
-
-            builder.send().await.map_err(|e| {
-                if let reqwest_middleware::Error::Reqwest(err) = e {
-                    crate::error::ConnectError::Reqwest(err.to_string())
-                } else {
-                    crate::error::ConnectError::Provider(e.to_string())
-                }
-            })?
-        };
-        let status = res.status().as_u16();
-        tracing::debug!(status = %status, "Received HTTP response");
-
-        // Fast path parsing of `Content-Length` manipulating bytes directly,
-        // bypassing string allocation and UTF-8 validation since bytes are ASCII digits.
-        let capacity = parse_content_length(res.headers()).unwrap_or(8192);
-
-        const MAX_BODY_SIZE: usize = 2 * 1024 * 1024; // 2MB limit
-
-        // Read body chunk by chunk up to 2MB to prevent memory exhaustion / DoS
-        // Cap the initial allocation at MAX_BODY_SIZE to prevent OOM if Content-Length is spoofed
-        let mut body_bytes = Vec::with_capacity(capacity.min(MAX_BODY_SIZE));
-
-        while let Some(chunk) = res
-            .chunk()
-            .await
-            .map_err(crate::error::ConnectError::from)?
+        #[cfg(miri)]
         {
-            if body_bytes.len() + chunk.len() > MAX_BODY_SIZE {
-                return Err(crate::error::ConnectError::Provider(
-                    "Response body size limit exceeded".to_string(),
-                ));
-            }
-            body_bytes.extend_from_slice(&chunk);
+            return Err(crate::error::ConnectError::Provider(
+                "Network requests are not supported under Miri".to_string(),
+            ));
         }
 
-        let body = match serde_json::from_slice(&body_bytes) {
-            Ok(v) => v,
-            Err(_) => {
-                let text = String::from_utf8(body_bytes).map_err(|e| {
-                    crate::error::ConnectError::Provider(format!(
-                        "Response body is not valid UTF-8: {}",
-                        e
-                    ))
-                })?;
-                Value::String(text)
+        #[cfg(not(miri))]
+        {
+            tracing::debug!("Executing HTTP request");
+            let method = match req.method.as_str() {
+                "POST" => reqwest::Method::POST,
+                _ => reqwest::Method::GET,
+            };
+
+            #[cfg(not(feature = "retry"))]
+            let mut res = {
+                let mut builder = self.client.request(method, &req.url);
+
+                builder = builder.headers(req.headers);
+
+                if let Some(token) = &req.bearer_auth {
+                    builder = builder.bearer_auth(token);
+                }
+
+                if let Some((user, pass)) = &req.basic_auth {
+                    builder = builder.basic_auth(user, pass.as_deref());
+                }
+
+                if let Some(f) = req.form {
+                    builder = builder.body(f).header(
+                        reqwest::header::CONTENT_TYPE,
+                        "application/x-www-form-urlencoded",
+                    );
+                } else if let Some(j) = req.json {
+                    builder = builder.json(&j);
+                }
+
+                builder
+                    .send()
+                    .await
+                    .map_err(crate::error::ConnectError::from)?
+            };
+
+            #[cfg(feature = "retry")]
+            let mut res = {
+                let mut builder = self.client.request(method, &req.url);
+
+                if !req.headers.is_empty() {
+                    builder = builder.headers(req.headers);
+                }
+
+                if let Some(token) = &req.bearer_auth {
+                    builder = builder.bearer_auth(token);
+                }
+
+                if let Some((user, pass)) = &req.basic_auth {
+                    builder = builder.basic_auth(user, pass.as_deref());
+                }
+
+                if let Some(body) = req.form {
+                    // reqwest_middleware::RequestBuilder doesn't have `.form()`, we set body and headers manually
+                    builder = builder.body(body).header(
+                        reqwest::header::CONTENT_TYPE,
+                        "application/x-www-form-urlencoded",
+                    );
+                } else if let Some(j) = req.json {
+                    // reqwest_middleware::RequestBuilder doesn't have `.json()`, we set body and headers manually
+                    let body = serde_json::to_string(&j)
+                        .map_err(|e| crate::error::ConnectError::Json(e.to_string()))?;
+                    builder = builder
+                        .body(body)
+                        .header(reqwest::header::CONTENT_TYPE, "application/json");
+                }
+
+                builder.send().await.map_err(|e| {
+                    if let reqwest_middleware::Error::Reqwest(err) = e {
+                        crate::error::ConnectError::Reqwest(err.to_string())
+                    } else {
+                        crate::error::ConnectError::Provider(e.to_string())
+                    }
+                })?
+            };
+            let status = res.status().as_u16();
+            tracing::debug!(status = %status, "Received HTTP response");
+
+            // Fast path parsing of `Content-Length` manipulating bytes directly,
+            // bypassing string allocation and UTF-8 validation since bytes are ASCII digits.
+            let capacity = parse_content_length(res.headers()).unwrap_or(8192);
+
+            const MAX_BODY_SIZE: usize = 2 * 1024 * 1024; // 2MB limit
+
+            // Read body chunk by chunk up to 2MB to prevent memory exhaustion / DoS
+            // Cap the initial allocation at MAX_BODY_SIZE to prevent OOM if Content-Length is spoofed
+            let mut body_bytes = Vec::with_capacity(capacity.min(MAX_BODY_SIZE));
+
+            while let Some(chunk) = res
+                .chunk()
+                .await
+                .map_err(crate::error::ConnectError::from)?
+            {
+                if body_bytes.len() + chunk.len() > MAX_BODY_SIZE {
+                    return Err(crate::error::ConnectError::Provider(
+                        "Response body size limit exceeded".to_string(),
+                    ));
+                }
+                body_bytes.extend_from_slice(&chunk);
             }
-        };
 
-        Ok(HttpResponse { status, body })
-    }
-}
+            let body = match serde_json::from_slice(&body_bytes) {
+                Ok(v) => v,
+                Err(_) => {
+                    let text = String::from_utf8(body_bytes).map_err(|e| {
+                        crate::error::ConnectError::Provider(format!(
+                            "Response body is not valid UTF-8: {}",
+                            e
+                        ))
+                    })?;
+                    Value::String(text)
+                }
+            };
 
-#[cfg(miri)]
-#[async_trait]
-impl HttpClient for ReqwestClient {
-    async fn execute(&self, _req: HttpRequest) -> Result<HttpResponse, crate::error::ConnectError> {
-        Err(crate::error::ConnectError::Provider(
-            "Network requests are not supported under Miri".to_string(),
-        ))
+            Ok(HttpResponse { status, body })
+        }
     }
 }
 
