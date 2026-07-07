@@ -179,8 +179,8 @@ impl ReqwestClient {
 
             #[cfg(feature = "retry")]
             {
-                let retry_policy =
-                    reqwest_retry::policies::ExponentialBackoff::builder().build_with_max_retries(3);
+                let retry_policy = reqwest_retry::policies::ExponentialBackoff::builder()
+                    .build_with_max_retries(3);
                 let client = reqwest_middleware::ClientBuilder::new(reqwest_client)
                     .with(reqwest_retry::RetryTransientMiddleware::new_with_policy(
                         retry_policy,
@@ -963,5 +963,256 @@ mod tests {
         assert_eq!(res.status, 500);
         // Must have made exactly 2 attempts (1 initial + 1 retry)
         assert_eq!(calls.load(Ordering::SeqCst), 2);
+    }
+
+    #[tokio::test]
+    #[cfg(all(not(miri), feature = "retry"))]
+    async fn test_reqwest_client_execute_retry_basic_auth() {
+        use wiremock::matchers::{header, method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/basic_auth"))
+            .and(header("Authorization", "Basic dXNlcjpwYXNz"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"ok": true})))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let client = ReqwestClient::new_with_retry(1);
+        let req = HttpRequest {
+            method: "GET".to_string(),
+            url: format!("{}/basic_auth", mock_server.uri()),
+            headers: reqwest::header::HeaderMap::new(),
+            form: None,
+            json: None,
+            basic_auth: Some(("user".to_string(), Some("pass".to_string()))),
+            bearer_auth: None,
+        };
+
+        let res = client.execute(req).await.unwrap();
+        assert_eq!(res.status, 200);
+    }
+
+    #[tokio::test]
+    #[cfg(all(not(miri), feature = "retry"))]
+    async fn test_reqwest_client_execute_retry_form() {
+        use wiremock::matchers::{body_string, header, method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/form"))
+            .and(header("Content-Type", "application/x-www-form-urlencoded"))
+            .and(body_string("key=value"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"ok": true})))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let client = ReqwestClient::new_with_retry(1);
+        let req = HttpRequest {
+            method: "POST".to_string(),
+            url: format!("{}/form", mock_server.uri()),
+            headers: reqwest::header::HeaderMap::new(),
+            form: Some("key=value".to_string()),
+            json: None,
+            basic_auth: None,
+            bearer_auth: None,
+        };
+
+        let res = client.execute(req).await.unwrap();
+        assert_eq!(res.status, 200);
+    }
+
+    #[tokio::test]
+    #[cfg(all(not(miri), feature = "retry"))]
+    async fn test_reqwest_client_execute_retry_json() {
+        use wiremock::matchers::{body_json, header, method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/json"))
+            .and(header("Content-Type", "application/json"))
+            .and(body_json(serde_json::json!({"key": "value"})))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"ok": true})))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let client = ReqwestClient::new_with_retry(1);
+        let req = HttpRequest {
+            method: "POST".to_string(),
+            url: format!("{}/json", mock_server.uri()),
+            headers: reqwest::header::HeaderMap::new(),
+            form: None,
+            json: Some(serde_json::json!({"key": "value"})),
+            basic_auth: None,
+            bearer_auth: None,
+        };
+
+        let res = client.execute(req).await.unwrap();
+        assert_eq!(res.status, 200);
+    }
+
+    #[tokio::test]
+    #[cfg(not(miri))]
+    async fn test_reqwest_client_execute_basic_auth() {
+        use wiremock::matchers::{header, method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/basic_auth"))
+            .and(header("Authorization", "Basic dXNlcjpwYXNz"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"ok": true})))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let client = ReqwestClient::new();
+        let req = HttpRequest {
+            method: "GET".to_string(),
+            url: format!("{}/basic_auth", mock_server.uri()),
+            headers: reqwest::header::HeaderMap::new(),
+            form: None,
+            json: None,
+            basic_auth: Some(("user".to_string(), Some("pass".to_string()))),
+            bearer_auth: None,
+        };
+
+        let res = client.execute(req).await.unwrap();
+        assert_eq!(res.status, 200);
+    }
+
+    #[tokio::test]
+    #[cfg(not(miri))]
+    async fn test_reqwest_client_execute_form() {
+        use wiremock::matchers::{body_string, header, method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/form"))
+            .and(header("Content-Type", "application/x-www-form-urlencoded"))
+            .and(body_string("key=value"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"ok": true})))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let client = ReqwestClient::new();
+        let req = HttpRequest {
+            method: "POST".to_string(),
+            url: format!("{}/form", mock_server.uri()),
+            headers: reqwest::header::HeaderMap::new(),
+            form: Some("key=value".to_string()),
+            json: None,
+            basic_auth: None,
+            bearer_auth: None,
+        };
+
+        let res = client.execute(req).await.unwrap();
+        assert_eq!(res.status, 200);
+    }
+
+    #[tokio::test]
+    #[cfg(not(miri))]
+    async fn test_reqwest_client_execute_json() {
+        use wiremock::matchers::{body_json, header, method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/json"))
+            .and(header("Content-Type", "application/json"))
+            .and(body_json(serde_json::json!({"key": "value"})))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"ok": true})))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let client = ReqwestClient::new();
+        let req = HttpRequest {
+            method: "POST".to_string(),
+            url: format!("{}/json", mock_server.uri()),
+            headers: reqwest::header::HeaderMap::new(),
+            form: None,
+            json: Some(serde_json::json!({"key": "value"})),
+            basic_auth: None,
+            bearer_auth: None,
+        };
+
+        let res = client.execute(req).await.unwrap();
+        assert_eq!(res.status, 200);
+    }
+
+    #[tokio::test]
+    #[cfg(not(miri))]
+    async fn test_reqwest_client_execute_invalid_utf8() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let mock_server = MockServer::start().await;
+
+        // Invalid UTF-8 sequence
+        let invalid_utf8 = vec![0xff, 0xff, 0xff];
+
+        Mock::given(method("GET"))
+            .and(path("/invalid_utf8"))
+            .respond_with(ResponseTemplate::new(200).set_body_bytes(invalid_utf8))
+            .mount(&mock_server)
+            .await;
+
+        let client = ReqwestClient::new();
+        let req = HttpRequest {
+            method: "GET".to_string(),
+            url: format!("{}/invalid_utf8", mock_server.uri()),
+            headers: reqwest::header::HeaderMap::new(),
+            form: None,
+            json: None,
+            basic_auth: None,
+            bearer_auth: None,
+        };
+
+        let err = client.execute(req).await.unwrap_err();
+        assert!(
+            matches!(&err, crate::error::ConnectError::Provider(msg) if msg.contains("not valid UTF-8")),
+            "Expected UTF-8 error, got: {:?}",
+            err
+        );
+    }
+
+    #[tokio::test]
+    #[cfg(all(not(miri), feature = "retry"))]
+    async fn test_reqwest_client_execute_retry_connection_error() {
+        let client = ReqwestClient::new_with_retry(1);
+        let req = HttpRequest {
+            method: "GET".to_string(),
+            url: "http://127.0.0.1:0/".to_string(),
+            headers: reqwest::header::HeaderMap::new(),
+            form: None,
+            json: None,
+            basic_auth: None,
+            bearer_auth: None,
+        };
+
+        let err = client.execute(req).await.unwrap_err();
+        assert!(
+            matches!(
+                &err,
+                crate::error::ConnectError::Reqwest(_) | crate::error::ConnectError::Provider(_)
+            ),
+            "Expected Reqwest or Provider error, got: {:?}",
+            err
+        );
     }
 }
