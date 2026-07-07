@@ -29,9 +29,9 @@ pub struct AuthCallback {
 impl AuthCallback {
     /// Helper to verify the CSRF state parameter.
     pub fn verify_state(&self, session_state: &str) -> Result<(), crate::error::ConnectError> {
-        use subtle::ConstantTimeEq;
         use sha2::{Digest, Sha256};
-        
+        use subtle::ConstantTimeEq;
+
         match &self.state {
             Some(state) => {
                 let hash_state = Sha256::digest(state.as_bytes());

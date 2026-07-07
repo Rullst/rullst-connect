@@ -5,8 +5,9 @@ use std::collections::HashMap;
 use std::sync::LazyLock;
 use tokio::sync::RwLock;
 
-pub static JWKS_CACHE: LazyLock<RwLock<HashMap<String, std::sync::Arc<jsonwebtoken::jwk::JwkSet>>>> =
-    LazyLock::new(|| RwLock::new(HashMap::new()));
+pub static JWKS_CACHE: LazyLock<
+    RwLock<HashMap<String, std::sync::Arc<jsonwebtoken::jwk::JwkSet>>>,
+> = LazyLock::new(|| RwLock::new(HashMap::new()));
 
 pub async fn fetch_and_cache_jwks(
     url: &str,
@@ -349,8 +350,8 @@ where
 }
 
 pub(crate) fn verify_nonce(token_nonce: &str, expected_nonce: &str) -> bool {
-    use subtle::ConstantTimeEq;
     use sha2::{Digest, Sha256};
+    use subtle::ConstantTimeEq;
 
     let hash_token = Sha256::digest(token_nonce.as_bytes());
     let hash_expected = Sha256::digest(expected_nonce.as_bytes());

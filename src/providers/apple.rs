@@ -93,7 +93,9 @@ impl AppleProvider {
         Ok(token)
     }
 
-    async fn get_jwks(&self) -> Result<std::sync::Arc<jsonwebtoken::jwk::JwkSet>, crate::error::ConnectError> {
+    async fn get_jwks(
+        &self,
+    ) -> Result<std::sync::Arc<jsonwebtoken::jwk::JwkSet>, crate::error::ConnectError> {
         crate::provider::fetch_and_cache_jwks(
             "https://appleid.apple.com/auth/keys",
             self.http_client.as_ref(),

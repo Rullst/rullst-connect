@@ -177,11 +177,21 @@ mod tests {
         let response = authorize_handler(axum::extract::Query(query))
             .await
             .into_response();
-        
-        assert_eq!(response.status(), axum::http::StatusCode::TEMPORARY_REDIRECT);
+
+        assert_eq!(
+            response.status(),
+            axum::http::StatusCode::TEMPORARY_REDIRECT
+        );
         let headers = response.headers();
-        let location = headers.get(axum::http::header::LOCATION).unwrap().to_str().unwrap();
-        assert_eq!(location, "http://example.com/callback?code=mock_auth_code_12345&state=test_state");
+        let location = headers
+            .get(axum::http::header::LOCATION)
+            .unwrap()
+            .to_str()
+            .unwrap();
+        assert_eq!(
+            location,
+            "http://example.com/callback?code=mock_auth_code_12345&state=test_state"
+        );
     }
 
     #[tokio::test]

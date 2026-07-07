@@ -292,7 +292,7 @@ impl HttpClient for ReqwestClient {
             } else if let Some(j) = req.json {
                 // reqwest_middleware::RequestBuilder doesn't have `.json()`, we set body and headers manually
                 let body = serde_json::to_string(&j)
-                    .map_err(|e| crate::error::ConnectError::Request(e.to_string()))?;
+                    .map_err(|e| crate::error::ConnectError::Json(e.to_string()))?;
                 builder = builder
                     .body(body)
                     .header(reqwest::header::CONTENT_TYPE, "application/json");
@@ -456,7 +456,11 @@ mod tests {
         let get_req = client.get("https://example.com/get");
         let _ = get_req.send().await;
         {
-            let req = captured.lock().await.take().expect("Request should be captured");
+            let req = captured
+                .lock()
+                .await
+                .take()
+                .expect("Request should be captured");
             assert_eq!(req.method, "GET");
             assert_eq!(req.url, "https://example.com/get");
         }
@@ -464,7 +468,11 @@ mod tests {
         let post_req = client.post("https://example.com/post");
         let _ = post_req.send().await;
         {
-            let req = captured.lock().await.take().expect("Request should be captured");
+            let req = captured
+                .lock()
+                .await
+                .take()
+                .expect("Request should be captured");
             assert_eq!(req.method, "POST");
             assert_eq!(req.url, "https://example.com/post");
         }
