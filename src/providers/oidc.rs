@@ -554,7 +554,7 @@ mod tests {
 
         assert!(
             OidcProvider::discover_with_client(
-                "http://issuer",
+                "https://issuer",
                 "id".to_string(),
                 "secret".to_string(),
                 "invalid_redirect".to_string(),
@@ -566,10 +566,10 @@ mod tests {
 
         assert!(
             OidcProvider::discover_with_client(
-                "http://issuer",
+                "https://issuer",
                 "".to_string(),
                 "secret".to_string(),
-                "http://redirect".to_string(),
+                "https://redirect".to_string(),
                 mock_client.clone()
             )
             .await
@@ -578,10 +578,10 @@ mod tests {
 
         assert!(
             OidcProvider::discover_with_client(
-                "http://issuer",
+                "https://issuer",
                 "id".to_string(),
                 "".to_string(),
-                "http://redirect".to_string(),
+                "https://redirect".to_string(),
                 mock_client.clone()
             )
             .await
