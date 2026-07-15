@@ -12,7 +12,7 @@ fuzz_target!(|data: &[u8]| {
     // LibFuzzer/ASan runs out of memory (RSS limit) when fuzzing highly nested JSON 
     // into serde_json::Value due to the overhead of tracking thousands of small allocations.
     // We restrict the depth here to prevent the fuzzer from timing out or hitting OOM.
-    let mut depth = 0;
+    let mut depth: usize = 0;
     for &b in data {
         if b == b'{' || b == b'[' {
             depth += 1;
