@@ -23,7 +23,7 @@ macro_rules! define_provider {
                 use secrecy::ExposeSecret;
                 assert!(!client_id.is_empty(), "Socialite Error: client_id cannot be empty");
                 assert!(!client_secret.expose_secret().is_empty(), "Socialite Error: client_secret cannot be empty");
-                assert!(redirect_url.starts_with("http"), "Socialite Error: redirect_url must be a valid HTTP/HTTPS URL");
+                assert!(redirect_url.starts_with("https://") || redirect_url.starts_with("http://127.0.0.1") || redirect_url.starts_with("http://localhost"), "Socialite Error: redirect_url must be HTTPS (or localhost)");
 
                 Self {
                     client_id,
@@ -132,13 +132,13 @@ mod tests {
         let provider = DummyProvider::new(
             "client_id".to_string(),
             secrecy::SecretString::from("client_secret".to_string()),
-            "http://redirect_url".to_string(),
+            "https://redirect_url".to_string(),
         );
 
         use secrecy::ExposeSecret;
         assert_eq!(provider.client_id, "client_id");
         assert_eq!(provider.client_secret.expose_secret(), "client_secret");
-        assert_eq!(provider.redirect_url, "http://redirect_url");
+        assert_eq!(provider.redirect_url, "https://redirect_url");
         assert_eq!(provider.scopes, "default_scope1 default_scope2".to_string());
         assert_eq!(provider.state, None);
         assert_eq!(provider.pkce_challenge, None);
@@ -149,7 +149,7 @@ mod tests {
         let provider = DummyProvider::new(
             "client_id".to_string(),
             secrecy::SecretString::from("client_secret".to_string()),
-            "http://redirect_url".to_string(),
+            "https://redirect_url".to_string(),
         )
         .with_scopes(&["new_scope1", "new_scope2"]);
 
@@ -161,7 +161,7 @@ mod tests {
         let provider = DummyProvider::new(
             "client_id".to_string(),
             secrecy::SecretString::from("client_secret".to_string()),
-            "http://redirect_url".to_string(),
+            "https://redirect_url".to_string(),
         )
         .with_state("my_state");
 
@@ -173,7 +173,7 @@ mod tests {
         let provider = DummyProvider::new(
             "client_id".to_string(),
             secrecy::SecretString::from("client_secret".to_string()),
-            "http://redirect_url".to_string(),
+            "https://redirect_url".to_string(),
         )
         .with_pkce("my_pkce_challenge");
 
@@ -181,5 +181,33 @@ mod tests {
             provider.pkce_challenge,
             Some("my_pkce_challenge".to_string())
         );
+    }
+
+    #[test]
+    fn test_macro_generated_struct_with_http_client() {
+        let client = std::sync::Arc::new(crate::client::ReqwestClient::new());
+        let provider = DummyProvider::new(
+            "client_id".to_string(),
+            secrecy::SecretString::from("client_secret".to_string()),
+            "https://redirect_url".to_string(),
+        )
+        .with_http_client(client);
+        
+        // We can't directly check the client, but we can verify the builder method chain works
+        assert_eq!(provider.client_id, "client_id");
+    }
+
+    #[test]
+    #[cfg(feature = "retry")]
+    fn test_macro_generated_struct_with_retry() {
+        let provider = DummyProvider::new(
+            "client_id".to_string(),
+            secrecy::SecretString::from("client_secret".to_string()),
+            "https://redirect_url".to_string(),
+        )
+        .with_retry(3);
+        
+        // Verifying builder method works
+        assert_eq!(provider.client_id, "client_id");
     }
 }

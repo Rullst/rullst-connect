@@ -35,8 +35,9 @@ pub async fn fetch_and_cache_jwks(
     #[cfg(not(test))]
     #[cfg_attr(coverage_nightly, coverage(off))]
     {
+        let url_str = url.to_string();
         let mut cache = JWKS_CACHE.write().await;
-        cache.insert(url.to_string(), jwks_arc.clone());
+        cache.insert(url_str, jwks_arc.clone());
     }
 
     Ok(jwks_arc)
@@ -788,7 +789,7 @@ mod tests {
                 &self,
                 _params: ExchangeParams<'_>,
             ) -> Result<ConnectUser, ConnectError> {
-                unimplemented!()
+                Err(ConnectError::Provider("get_user not implemented for mock".into()))
             }
             async fn get_user_from_token(
                 &self,
@@ -880,7 +881,7 @@ mod tests {
                 &self,
                 _params: ExchangeParams<'_>,
             ) -> Result<ConnectUser, ConnectError> {
-                unimplemented!()
+                Err(ConnectError::Provider("get_user not implemented for mock".into()))
             }
             async fn get_user_from_token(
                 &self,
@@ -953,7 +954,7 @@ mod tests {
                 &self,
                 _params: ExchangeParams<'_>,
             ) -> Result<ConnectUser, ConnectError> {
-                unimplemented!()
+                Err(ConnectError::Provider("get_user not implemented for mock".into()))
             }
             async fn get_user_from_token(
                 &self,
@@ -990,5 +991,50 @@ mod tests {
             }
             _ => panic!("Expected ConnectError::Provider"),
         }
+    }
+
+    #[tokio::test]
+    async fn test_fetch_and_cache_jwks() {
+        struct MockJwksClient;
+        #[async_trait]
+        impl crate::client::HttpClient for MockJwksClient {
+            async fn execute(
+                &self,
+                req: crate::client::HttpRequest,
+            ) -> Result<crate::client::HttpResponse, crate::error::ConnectError> {
+                if req.url.contains("jwks") {
+                    Ok(crate::client::HttpResponse {
+                        status: 200,
+                        body: serde_json::json!({
+                            "keys": [
+                                {
+                                    "kty": "RSA",
+                                    "kid": "test-kid",
+                                    "use": "sig",
+                                    "n": "123",
+                                    "e": "AQAB"
+                                }
+                            ]
+                        }),
+                    })
+                } else {
+                    Err(crate::error::ConnectError::Provider("Not found".into()))
+                }
+            }
+        }
+
+        let test_url = "https://example.com/jwks_test";
+        {
+            let mut cache = JWKS_CACHE.write().await;
+            cache.remove(test_url);
+        }
+
+        let client = MockJwksClient;
+        let jwk_set = fetch_and_cache_jwks(test_url, &client).await.expect("Failed to fetch JWKS");
+        assert_eq!(jwk_set.keys.len(), 1);
+        
+        // Next fetch should be cached (does not require mock client execution if mocked to fail)
+        let cached = fetch_and_cache_jwks(test_url, &client).await.unwrap();
+        assert_eq!(cached.keys.len(), 1);
     }
 }

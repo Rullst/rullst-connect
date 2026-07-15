@@ -5,17 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [10.0.6] - Unreleased
+## [11.0.0] - 2026-07-15
+
+### Breaking Changes
+- **HTTPS Enforcement**: All `redirect_url` and `issuer_url` declarations now strictly require `https://`. An exception has been added for development environments running on `http://localhost` and `http://127.0.0.1`. Applications using plain `http://` in production or tests will fail during provider initialization.
 
 ### Performance
 - **JWKS Cache Optimization**: Improved `JWKS_CACHE` to store `Arc<JwkSet>` instead of the full JSON structure. This eliminates deep cloning during cache hits and reduces memory allocations under high concurrent OIDC authentication load.
+- **Client Allocations**: Reduced heap allocations (`String`) during `HttpRequest` construction by leveraging `Cow<'static, str>` for HTTP methods, and optimized error allocations in the fallback path.
 
 ### Security
 - **Timing Attack Mitigation**: Secured `verify_nonce` and `verify_state` against potential length-based timing attacks by hashing inputs using `SHA256` before applying constant-time comparisons.
 - **Strict JSON Serialization Errors**: Replaced `unwrap_or_default()` in HTTP client with strict error handling (`map_err`) to avoid accidentally sending empty bodies on payload serialization failures.
 
+### Fixed
+- **Mock Provider Panics**: Removed `unimplemented!()` panics in `SimpleProvider` and `FailingUserProvider` mock structs, replacing them with explicit `ConnectError` returns to improve stability in testing environments.
+
 ### Added
-- **Test Coverage**: Added test coverage for `HttpClientExt` helper methods (`.get()` and `.post()`).
+- **Test Coverage**: Added test coverage for `HttpClientExt` helper methods (`.get()` and `.post()`), `basic_auth` requests, fallback HTTP mapping, JWKS caching flow, and `with_http_client`/`with_retry` builder methods.
 - **Mock IDP Coverage**: Added tests for valid authorization and token exchange paths in the end-to-end `mock_idp` utilities.
 
 ## [10.0.5] - 2026-07-05

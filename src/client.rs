@@ -4,7 +4,7 @@ use serde_json::Value;
 /// The request structure passed to the HttpClient.
 #[derive(Debug, Clone)]
 pub struct HttpRequest {
-    pub method: String,
+    pub method: std::borrow::Cow<'static, str>,
     pub url: String,
     pub headers: reqwest::header::HeaderMap,
     pub form: Option<String>,
@@ -34,10 +34,10 @@ pub trait HttpClientExt {
 
 impl HttpClientExt for dyn HttpClient + '_ {
     fn get(&self, url: impl Into<String>) -> RequestBuilder<'_> {
-        RequestBuilder::new(self, "GET".to_string(), url.into())
+        RequestBuilder::new(self, "GET", url.into())
     }
     fn post(&self, url: impl Into<String>) -> RequestBuilder<'_> {
-        RequestBuilder::new(self, "POST".to_string(), url.into())
+        RequestBuilder::new(self, "POST", url.into())
     }
 }
 
@@ -48,11 +48,11 @@ pub struct RequestBuilder<'a> {
 }
 
 impl<'a> RequestBuilder<'a> {
-    pub fn new(client: &'a dyn HttpClient, method: String, url: String) -> Self {
+    pub fn new(client: &'a dyn HttpClient, method: impl Into<std::borrow::Cow<'static, str>>, url: String) -> Self {
         Self {
             client,
             req: HttpRequest {
-                method,
+                method: method.into(),
                 url,
                 headers: reqwest::header::HeaderMap::new(),
                 form: None,
@@ -113,22 +113,24 @@ impl ResponseWrapper {
         if self.res.status >= 400 {
             tracing::error!("HTTP status {} received", self.res.status);
             let mut code = format!("HTTP_{}", self.res.status);
-            let mut message = "Unknown error".to_string();
+            let mut message_opt: Option<String> = None;
 
             if let Some(obj) = self.res.body.as_object() {
                 if let Some(err) = obj.get("error").and_then(|v| v.as_str()) {
                     code = err.to_string();
                 }
                 if let Some(desc) = obj.get("error_description").and_then(|v| v.as_str()) {
-                    message = desc.to_string();
+                    message_opt = Some(desc.to_string());
                 } else if let Some(msg) = obj.get("message").and_then(|v| v.as_str()) {
-                    message = msg.to_string();
+                    message_opt = Some(msg.to_string());
                 } else {
-                    message = self.res.body.to_string();
+                    message_opt = Some(self.res.body.to_string());
                 }
             } else if let Some(s) = self.res.body.as_str() {
-                message = s.to_string();
+                message_opt = Some(s.to_string());
             }
+
+            let mut message = message_opt.unwrap_or_else(|| "Unknown error".to_string());
 
             // Prevent sensitive information exposure or massive log spam
             if message.len() > 512 {
@@ -243,7 +245,7 @@ impl HttpClient for ReqwestClient {
         #[cfg(not(miri))]
         {
             tracing::debug!("Executing HTTP request");
-            let method = match req.method.as_str() {
+            let method = match req.method.as_ref() {
                 "POST" => reqwest::Method::POST,
                 _ => reqwest::Method::GET,
             };
@@ -699,7 +701,7 @@ mod tests {
         headers.insert("X-Test", "Value".parse().unwrap());
 
         let req = HttpRequest {
-            method: "POST".to_string(),
+            method: "POST".into(),
             url: format!("{}/test", mock_server.uri()),
             headers,
             form: None,
@@ -792,7 +794,7 @@ mod tests {
 
         let client = ReqwestClient::new();
         let req = HttpRequest {
-            method: "GET".to_string(),
+            method: "GET".into(),
             url: format!("{}/oversized", mock_server.uri()),
             headers: reqwest::header::HeaderMap::new(),
             form: None,
@@ -837,7 +839,7 @@ mod tests {
 
         let client = ReqwestClient::new();
         let req = HttpRequest {
-            method: "GET".to_string(),
+            method: "GET".into(),
             url: format!("{}/exact", mock_server.uri()),
             headers: reqwest::header::HeaderMap::new(),
             form: None,
@@ -859,7 +861,7 @@ mod tests {
     async fn test_miri_execute_always_errors() {
         let client = ReqwestClient::new();
         let req = HttpRequest {
-            method: "GET".to_string(),
+            method: "GET".into(),
             url: "https://example.com".to_string(),
             headers: reqwest::header::HeaderMap::new(),
             form: None,
@@ -902,7 +904,7 @@ mod tests {
         headers.insert("X-Custom", "hello".parse().unwrap());
 
         let req = HttpRequest {
-            method: "GET".to_string(),
+            method: "GET".into(),
             url: format!("{}/headers_test", mock_server.uri()),
             headers,
             form: None,
@@ -950,7 +952,7 @@ mod tests {
         // Create client with 1 retry (total 2 attempts max)
         let client = ReqwestClient::new_with_retry(1);
         let req = HttpRequest {
-            method: "GET".to_string(),
+            method: "GET".into(),
             url: format!("{}/retry_count", mock_server.uri()),
             headers: reqwest::header::HeaderMap::new(),
             form: None,
@@ -983,7 +985,7 @@ mod tests {
 
         let client = ReqwestClient::new_with_retry(1);
         let req = HttpRequest {
-            method: "GET".to_string(),
+            method: "GET".into(),
             url: format!("{}/basic_auth", mock_server.uri()),
             headers: reqwest::header::HeaderMap::new(),
             form: None,
@@ -1015,7 +1017,7 @@ mod tests {
 
         let client = ReqwestClient::new_with_retry(1);
         let req = HttpRequest {
-            method: "POST".to_string(),
+            method: "POST".into(),
             url: format!("{}/form", mock_server.uri()),
             headers: reqwest::header::HeaderMap::new(),
             form: Some("key=value".to_string()),
@@ -1047,7 +1049,7 @@ mod tests {
 
         let client = ReqwestClient::new_with_retry(1);
         let req = HttpRequest {
-            method: "POST".to_string(),
+            method: "POST".into(),
             url: format!("{}/json", mock_server.uri()),
             headers: reqwest::header::HeaderMap::new(),
             form: None,
@@ -1078,7 +1080,7 @@ mod tests {
 
         let client = ReqwestClient::new();
         let req = HttpRequest {
-            method: "GET".to_string(),
+            method: "GET".into(),
             url: format!("{}/basic_auth", mock_server.uri()),
             headers: reqwest::header::HeaderMap::new(),
             form: None,
@@ -1110,7 +1112,7 @@ mod tests {
 
         let client = ReqwestClient::new();
         let req = HttpRequest {
-            method: "POST".to_string(),
+            method: "POST".into(),
             url: format!("{}/form", mock_server.uri()),
             headers: reqwest::header::HeaderMap::new(),
             form: Some("key=value".to_string()),
@@ -1142,7 +1144,7 @@ mod tests {
 
         let client = ReqwestClient::new();
         let req = HttpRequest {
-            method: "POST".to_string(),
+            method: "POST".into(),
             url: format!("{}/json", mock_server.uri()),
             headers: reqwest::header::HeaderMap::new(),
             form: None,
@@ -1174,7 +1176,7 @@ mod tests {
 
         let client = ReqwestClient::new();
         let req = HttpRequest {
-            method: "GET".to_string(),
+            method: "GET".into(),
             url: format!("{}/invalid_utf8", mock_server.uri()),
             headers: reqwest::header::HeaderMap::new(),
             form: None,
@@ -1214,5 +1216,54 @@ mod tests {
             "Expected Reqwest or Provider error, got: {:?}",
             err
         );
+        #[tokio::test]
+    #[cfg(not(miri))]
+    async fn test_reqwest_client_execute_basic_auth() {
+        use wiremock::matchers::{header, method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/basic"))
+            // "Basic dXNlcm5hbWU6cGFzc3dvcmQ=" is base64 of "username:password"
+            .and(header("Authorization", "Basic dXNlcm5hbWU6cGFzc3dvcmQ="))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"auth": "ok"})))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let client = ReqwestClient::new();
+
+        let req = HttpRequest {
+            method: "GET".into(),
+            url: format!("{}/basic", mock_server.uri()),
+            headers: reqwest::header::HeaderMap::new(),
+            form: None,
+            json: None,
+            basic_auth: Some(("username".to_string(), Some("password".to_string()))),
+            bearer_auth: None,
+        };
+
+        let res = client.execute(req).await.unwrap();
+        assert_eq!(res.status, 200);
+        assert_eq!(res.body["auth"], "ok");
+    }
+
+    #[test]
+    fn test_error_for_status_fallback_to_string() {
+        let res = HttpResponse {
+            status: 400,
+            body: serde_json::Value::String("Plain text error message".to_string()),
+        };
+        let err = res.error_for_status().unwrap_err();
+        match err {
+            crate::error::ConnectError::Provider(msg) => {
+                assert_eq!(msg, "HTTP_400: Plain text error message");
+            }
+            _ => panic!("Expected ConnectError::Provider"),
+        }
     }
 }
+}
+

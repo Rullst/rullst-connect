@@ -102,7 +102,7 @@ mod tests {
             "github",
             "id".to_string(),
             secrecy::SecretString::from("secret".to_string()),
-            "http://url".to_string(),
+            "https://url".to_string(),
         );
         assert!(github.is_ok());
 
@@ -110,7 +110,7 @@ mod tests {
             "apple",
             "id".to_string(),
             secrecy::SecretString::from("secret".to_string()),
-            "http://url".to_string(),
+            "https://url".to_string(),
         );
         assert!(
             matches!(apple, Err(crate::error::ConnectError::Provider(ref msg)) if msg.contains("requires custom configuration"))
@@ -120,7 +120,7 @@ mod tests {
             "unknown",
             "id".to_string(),
             secrecy::SecretString::from("secret".to_string()),
-            "http://url".to_string(),
+            "https://url".to_string(),
         );
         assert!(unknown.is_err());
 
@@ -129,7 +129,7 @@ mod tests {
             "google",
             "id".to_string(),
             secrecy::SecretString::from("secret".to_string()),
-            "http://url".to_string(),
+            "https://url".to_string(),
         );
         assert!(google.is_ok());
 
@@ -137,7 +137,7 @@ mod tests {
             "facebook",
             "id".to_string(),
             secrecy::SecretString::from("secret".to_string()),
-            "http://url".to_string(),
+            "https://url".to_string(),
         );
         assert!(facebook.is_ok());
 
@@ -145,7 +145,7 @@ mod tests {
             "discord",
             "id".to_string(),
             secrecy::SecretString::from("secret".to_string()),
-            "http://url".to_string(),
+            "https://url".to_string(),
         );
         assert!(discord.is_ok());
 
@@ -153,7 +153,7 @@ mod tests {
             "linkedin",
             "id".to_string(),
             secrecy::SecretString::from("secret".to_string()),
-            "http://url".to_string(),
+            "https://url".to_string(),
         );
         assert!(linkedin.is_ok());
 
@@ -161,7 +161,7 @@ mod tests {
             "x",
             "id".to_string(),
             secrecy::SecretString::from("secret".to_string()),
-            "http://url".to_string(),
+            "https://url".to_string(),
         );
         assert!(x.is_ok());
 
@@ -169,7 +169,7 @@ mod tests {
             "microsoft",
             "id".to_string(),
             secrecy::SecretString::from("secret".to_string()),
-            "http://url".to_string(),
+            "https://url".to_string(),
         );
         assert!(microsoft.is_ok());
 
@@ -178,7 +178,7 @@ mod tests {
             "auth0",
             "id".to_string(),
             secrecy::SecretString::from("secret".to_string()),
-            "http://url".to_string(),
+            "https://url".to_string(),
         );
         assert!(
             matches!(auth0, Err(crate::error::ConnectError::Provider(ref msg)) if msg.contains("requires custom configuration"))
@@ -188,7 +188,7 @@ mod tests {
             "cognito",
             "id".to_string(),
             secrecy::SecretString::from("secret".to_string()),
-            "http://url".to_string(),
+            "https://url".to_string(),
         );
         assert!(
             matches!(cognito, Err(crate::error::ConnectError::Provider(ref msg)) if msg.contains("requires custom configuration"))
@@ -198,7 +198,7 @@ mod tests {
             "oidc",
             "id".to_string(),
             secrecy::SecretString::from("secret".to_string()),
-            "http://url".to_string(),
+            "https://url".to_string(),
         );
         assert!(
             matches!(oidc, Err(crate::error::ConnectError::Provider(ref msg)) if msg.contains("requires custom configuration"))

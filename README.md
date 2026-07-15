@@ -80,7 +80,7 @@ cargo add rullst-connect
 Or manually add it to your `Cargo.toml`:
 ```toml
 [dependencies]
-rullst-connect = "10.0.5"
+rullst-connect = "11.0.0"
 tokio = { version = "1.52", features = ["full"] }
 ```
 

@@ -43,14 +43,14 @@ impl OidcProvider {
         redirect_url: String,
         client: Arc<dyn HttpClient>,
     ) -> Result<Self, ConnectError> {
-        if !issuer_url.starts_with("http") {
+        if !issuer_url.starts_with("https://") && !issuer_url.starts_with("http://127.0.0.1") && !issuer_url.starts_with("http://localhost") {
             return Err(crate::error::ConnectError::Provider(
-                "OIDC Error: issuer_url must be a valid HTTP/HTTPS URL".to_string(),
+                "OIDC Error: issuer_url must be HTTPS (or localhost)".to_string(),
             ));
         }
-        if !redirect_url.starts_with("http") {
+        if !redirect_url.starts_with("https://") && !redirect_url.starts_with("http://127.0.0.1") && !redirect_url.starts_with("http://localhost") {
             return Err(crate::error::ConnectError::Provider(
-                "OIDC Error: redirect_url must be a valid HTTP/HTTPS URL".to_string(),
+                "OIDC Error: redirect_url must be HTTPS (or localhost)".to_string(),
             ));
         }
         if client_id.is_empty() {
