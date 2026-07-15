@@ -545,44 +545,56 @@ mod tests {
             "id".to_string(),
             "secret".to_string(),
             "https://redirect".to_string(),
-            mock_client.clone()
+            mock_client.clone(),
         )
         .await
-        .err().expect("expected error");
-        assert!(matches!(err, crate::error::ConnectError::Provider(msg) if msg.contains("issuer_url must be HTTPS (or localhost)")));
+        .err()
+        .expect("expected error");
+        assert!(
+            matches!(err, crate::error::ConnectError::Provider(msg) if msg.contains("issuer_url must be HTTPS (or localhost)"))
+        );
 
         let err = OidcProvider::discover_with_client(
             "https://issuer",
             "id".to_string(),
             "secret".to_string(),
             "http://invalid_redirect".to_string(),
-            mock_client.clone()
+            mock_client.clone(),
         )
         .await
-        .err().expect("expected error");
-        assert!(matches!(err, crate::error::ConnectError::Provider(msg) if msg.contains("redirect_url must be HTTPS (or localhost)")));
+        .err()
+        .expect("expected error");
+        assert!(
+            matches!(err, crate::error::ConnectError::Provider(msg) if msg.contains("redirect_url must be HTTPS (or localhost)"))
+        );
 
         let err = OidcProvider::discover_with_client(
             "https://issuer",
             "".to_string(),
             "secret".to_string(),
             "https://redirect".to_string(),
-            mock_client.clone()
+            mock_client.clone(),
         )
         .await
-        .err().expect("expected error");
-        assert!(matches!(err, crate::error::ConnectError::Provider(msg) if msg.contains("client_id cannot be empty")));
+        .err()
+        .expect("expected error");
+        assert!(
+            matches!(err, crate::error::ConnectError::Provider(msg) if msg.contains("client_id cannot be empty"))
+        );
 
         let err = OidcProvider::discover_with_client(
             "https://issuer",
             "id".to_string(),
             "".to_string(),
             "https://redirect".to_string(),
-            mock_client.clone()
+            mock_client.clone(),
         )
         .await
-        .err().expect("expected error");
-        assert!(matches!(err, crate::error::ConnectError::Provider(msg) if msg.contains("client_secret cannot be empty")));
+        .err()
+        .expect("expected error");
+        assert!(
+            matches!(err, crate::error::ConnectError::Provider(msg) if msg.contains("client_secret cannot be empty"))
+        );
     }
 
     #[tokio::test]
