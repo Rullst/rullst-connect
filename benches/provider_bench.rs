@@ -8,7 +8,7 @@ fn provider_benchmark(c: &mut Criterion) {
             GithubProvider::new(
                 black_box("client_id".to_string()),
                 black_box("client_secret".to_string().into()),
-                black_box("http://redirect_url".to_string()),
+                black_box("https://redirect_url".to_string()),
             )
         })
     });

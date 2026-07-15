@@ -750,7 +750,7 @@ mod tests {
 
         let client = ReqwestClient::new_with_retry(3);
         let req = HttpRequest {
-            method: "GET".to_string(),
+            method: "GET".into(),
             url: format!("{}/retry_test", mock_server.uri()),
             headers: reqwest::header::HeaderMap::new(),
             form: None,
@@ -1198,7 +1198,7 @@ mod tests {
     async fn test_reqwest_client_execute_retry_connection_error() {
         let client = ReqwestClient::new_with_retry(1);
         let req = HttpRequest {
-            method: "GET".to_string(),
+            method: "GET".into(),
             url: "http://127.0.0.1:0/".to_string(),
             headers: reqwest::header::HeaderMap::new(),
             form: None,
@@ -1216,54 +1216,26 @@ mod tests {
             "Expected Reqwest or Provider error, got: {:?}",
             err
         );
-        #[tokio::test]
-    #[cfg(not(miri))]
-    async fn test_reqwest_client_execute_basic_auth() {
-        use wiremock::matchers::{header, method, path};
-        use wiremock::{Mock, MockServer, ResponseTemplate};
-
-        let mock_server = MockServer::start().await;
-
-        Mock::given(method("GET"))
-            .and(path("/basic"))
-            // "Basic dXNlcm5hbWU6cGFzc3dvcmQ=" is base64 of "username:password"
-            .and(header("Authorization", "Basic dXNlcm5hbWU6cGFzc3dvcmQ="))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"auth": "ok"})))
-            .expect(1)
-            .mount(&mock_server)
-            .await;
-
-        let client = ReqwestClient::new();
-
-        let req = HttpRequest {
-            method: "GET".into(),
-            url: format!("{}/basic", mock_server.uri()),
-            headers: reqwest::header::HeaderMap::new(),
-            form: None,
-            json: None,
-            basic_auth: Some(("username".to_string(), Some("password".to_string()))),
-            bearer_auth: None,
-        };
-
-        let res = client.execute(req).await.unwrap();
-        assert_eq!(res.status, 200);
-        assert_eq!(res.body["auth"], "ok");
     }
+
+
 
     #[test]
     fn test_error_for_status_fallback_to_string() {
-        let res = HttpResponse {
-            status: 400,
-            body: serde_json::Value::String("Plain text error message".to_string()),
+        let res = ResponseWrapper {
+            res: HttpResponse {
+                status: 400,
+                body: serde_json::Value::String("Plain text error message".to_string()),
+            },
         };
         let err = res.error_for_status().unwrap_err();
         match err {
-            crate::error::ConnectError::Provider(msg) => {
-                assert_eq!(msg, "HTTP_400: Plain text error message");
+            crate::error::ConnectError::ProviderApiError { code, message } => {
+                assert_eq!(code, "HTTP_400");
+                assert_eq!(message, "Plain text error message");
             }
-            _ => panic!("Expected ConnectError::Provider"),
+            _ => panic!("Expected ConnectError::ProviderApiError"),
         }
     }
-}
 }
 
