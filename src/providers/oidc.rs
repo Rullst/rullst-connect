@@ -540,53 +540,103 @@ mod tests {
             captured_urls: tokio::sync::Mutex::new(vec![]),
         });
 
-        assert!(
-            OidcProvider::discover_with_client(
-                "invalid_url",
-                "id".to_string(),
-                "secret".to_string(),
-                "http://redirect".to_string(),
-                mock_client.clone()
-            )
-            .await
-            .is_err()
-        );
+        let err = OidcProvider::discover_with_client(
+            "http://invalid_url",
+            "id".to_string(),
+            "secret".to_string(),
+            "https://redirect".to_string(),
+            mock_client.clone()
+        )
+        .await
+        .err().expect("expected error");
+        assert!(matches!(err, crate::error::ConnectError::Provider(msg) if msg.contains("issuer_url must be HTTPS (or localhost)")));
 
-        assert!(
-            OidcProvider::discover_with_client(
-                "https://issuer",
-                "id".to_string(),
-                "secret".to_string(),
-                "invalid_redirect".to_string(),
-                mock_client.clone()
-            )
-            .await
-            .is_err()
-        );
+        let err = OidcProvider::discover_with_client(
+            "https://issuer",
+            "id".to_string(),
+            "secret".to_string(),
+            "http://invalid_redirect".to_string(),
+            mock_client.clone()
+        )
+        .await
+        .err().expect("expected error");
+        assert!(matches!(err, crate::error::ConnectError::Provider(msg) if msg.contains("redirect_url must be HTTPS (or localhost)")));
 
-        assert!(
-            OidcProvider::discover_with_client(
-                "https://issuer",
-                "".to_string(),
-                "secret".to_string(),
-                "https://redirect".to_string(),
-                mock_client.clone()
-            )
-            .await
-            .is_err()
-        );
+        let err = OidcProvider::discover_with_client(
+            "https://issuer",
+            "".to_string(),
+            "secret".to_string(),
+            "https://redirect".to_string(),
+            mock_client.clone()
+        )
+        .await
+        .err().expect("expected error");
+        assert!(matches!(err, crate::error::ConnectError::Provider(msg) if msg.contains("client_id cannot be empty")));
 
-        assert!(
-            OidcProvider::discover_with_client(
-                "https://issuer",
-                "id".to_string(),
-                "".to_string(),
-                "https://redirect".to_string(),
-                mock_client.clone()
-            )
-            .await
-            .is_err()
-        );
+        let err = OidcProvider::discover_with_client(
+            "https://issuer",
+            "id".to_string(),
+            "".to_string(),
+            "https://redirect".to_string(),
+            mock_client.clone()
+        )
+        .await
+        .err().expect("expected error");
+        assert!(matches!(err, crate::error::ConnectError::Provider(msg) if msg.contains("client_secret cannot be empty")));
+    }
+
+    #[tokio::test]
+    async fn test_oidc_discover_success_localhost() {
+        let mock_client = Arc::new(MockOidcClient {
+            config_body: json!({
+                "authorization_endpoint": "https://auth.com/authorize",
+                "token_endpoint": "https://auth.com/token",
+                "userinfo_endpoint": "https://auth.com/userinfo",
+                "jwks_uri": "https://auth.com/jwks",
+                "issuer": "http://localhost:8080"
+            }),
+            jwks_body: json!({
+                "keys": []
+            }),
+            captured_urls: tokio::sync::Mutex::new(vec![]),
+        });
+
+        let _provider = OidcProvider::discover_with_client(
+            "http://localhost:8080",
+            "client_id".to_string(),
+            "client_secret".to_string(),
+            "http://localhost:8080/redirect".to_string(),
+            mock_client.clone(),
+        )
+        .await
+        .expect("OIDC discovery failed");
+    }
+
+    #[tokio::test]
+    async fn test_oidc_discover_success_127_0_0_1() {
+        let mock_client = Arc::new(MockOidcClient {
+            config_body: json!({
+                "authorization_endpoint": "https://auth.com/authorize",
+                "token_endpoint": "https://auth.com/token",
+                "userinfo_endpoint": "https://auth.com/userinfo",
+                "jwks_uri": "https://auth.com/jwks",
+                "issuer": "http://127.0.0.1:8080"
+            }),
+            jwks_body: json!({
+                "keys": []
+            }),
+            captured_urls: tokio::sync::Mutex::new(vec![]),
+        });
+
+        let _provider = OidcProvider::discover_with_client(
+            "http://127.0.0.1:8080",
+            "client_id".to_string(),
+            "client_secret".to_string(),
+            "http://127.0.0.1:8080/redirect".to_string(),
+            mock_client.clone(),
+        )
+        .await
+        .expect("OIDC discovery failed");
     }
 
     #[tokio::test]
