@@ -192,7 +192,7 @@ mod tests {
             "https://redirect_url".to_string(),
         )
         .with_http_client(client);
-        
+
         // We can't directly check the client, but we can verify the builder method chain works
         assert_eq!(provider.client_id, "client_id");
     }
@@ -206,7 +206,7 @@ mod tests {
             "https://redirect_url".to_string(),
         )
         .with_retry(3);
-        
+
         // Verifying builder method works
         assert_eq!(provider.client_id, "client_id");
     }

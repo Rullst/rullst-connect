@@ -48,7 +48,11 @@ pub struct RequestBuilder<'a> {
 }
 
 impl<'a> RequestBuilder<'a> {
-    pub fn new(client: &'a dyn HttpClient, method: impl Into<std::borrow::Cow<'static, str>>, url: String) -> Self {
+    pub fn new(
+        client: &'a dyn HttpClient,
+        method: impl Into<std::borrow::Cow<'static, str>>,
+        url: String,
+    ) -> Self {
         Self {
             client,
             req: HttpRequest {
@@ -1218,8 +1222,6 @@ mod tests {
         );
     }
 
-
-
     #[test]
     fn test_error_for_status_fallback_to_string() {
         let res = ResponseWrapper {
@@ -1238,4 +1240,3 @@ mod tests {
         }
     }
 }
-

@@ -789,7 +789,9 @@ mod tests {
                 &self,
                 _params: ExchangeParams<'_>,
             ) -> Result<ConnectUser, ConnectError> {
-                Err(ConnectError::Provider("get_user not implemented for mock".into()))
+                Err(ConnectError::Provider(
+                    "get_user not implemented for mock".into(),
+                ))
             }
             async fn get_user_from_token(
                 &self,
@@ -881,7 +883,9 @@ mod tests {
                 &self,
                 _params: ExchangeParams<'_>,
             ) -> Result<ConnectUser, ConnectError> {
-                Err(ConnectError::Provider("get_user not implemented for mock".into()))
+                Err(ConnectError::Provider(
+                    "get_user not implemented for mock".into(),
+                ))
             }
             async fn get_user_from_token(
                 &self,
@@ -954,7 +958,9 @@ mod tests {
                 &self,
                 _params: ExchangeParams<'_>,
             ) -> Result<ConnectUser, ConnectError> {
-                Err(ConnectError::Provider("get_user not implemented for mock".into()))
+                Err(ConnectError::Provider(
+                    "get_user not implemented for mock".into(),
+                ))
             }
             async fn get_user_from_token(
                 &self,
@@ -1030,9 +1036,11 @@ mod tests {
         }
 
         let client = MockJwksClient;
-        let jwk_set = fetch_and_cache_jwks(test_url, &client).await.expect("Failed to fetch JWKS");
+        let jwk_set = fetch_and_cache_jwks(test_url, &client)
+            .await
+            .expect("Failed to fetch JWKS");
         assert_eq!(jwk_set.keys.len(), 1);
-        
+
         // Next fetch should be cached (does not require mock client execution if mocked to fail)
         let cached = fetch_and_cache_jwks(test_url, &client).await.unwrap();
         assert_eq!(cached.keys.len(), 1);
