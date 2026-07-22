@@ -117,6 +117,22 @@ body {
 .github-btn:hover {
     background: rgba(255, 255, 255, 0.2) !important;
 }
+.bench-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: rgba(138, 43, 226, 0.15);
+    color: var(--text-primary) !important;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    border: 1px solid rgba(138, 43, 226, 0.3);
+    transition: all 0.3s ease !important;
+}
+.bench-btn:hover {
+    background: rgba(138, 43, 226, 0.3) !important;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(138, 43, 226, 0.2);
+}
 
 /* Hero Section */
 .hero {
