@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Maintenance
+- **Dependabot Bumps**: Updated GitHub Actions workflows to their latest versions (`github/codeql-action` to `v4.37.1` and `EmbarkStudios/cargo-deny-action` to `v2.1.1`).
+
 ## [11.0.0] - 2026-07-15
 
 ### Breaking Changes
