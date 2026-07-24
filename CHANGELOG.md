@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Maintenance
-- **Dependabot Bumps**: Updated GitHub Actions workflows to their latest versions (`github/codeql-action` to `v4.37.1` and `EmbarkStudios/cargo-deny-action` to `v2.1.1`).
+- **Dependabot Bumps**: Updated GitHub Actions workflows (`github/codeql-action` to `v4.37.3`, `ossf/scorecard-action` to `v2.4.4`, `actions/configure-pages` to `v6.0.0`, `actions/upload-pages-artifact` to `v5.0.0`, and `EmbarkStudios/cargo-deny-action` to `v2.1.1`). Also bumped `base64` crate from `0.22` to `0.23`.
 
 ## [11.0.0] - 2026-07-15
 
