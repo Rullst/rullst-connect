@@ -1,3 +1,8 @@
+⚠️ NOTICE: WE HAVE MOVED TO A MONOREPO! ⚠️
+
+All development, issues, and pull requests for this crate have been migrated to the official [Rullst Monorepo](https://github.com/Rullst/Rullst).
+Please visit the main repository for the latest updates, source code, and documentation.
+
 # Rullst Connect 🦀
 
 [![Crates.io](https://img.shields.io/crates/v/rullst-connect.svg?style=for-the-badge&logo=rust)](https://crates.io/crates/rullst-connect)
